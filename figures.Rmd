@@ -1,0 +1,534 @@
+---
+title: "figures_knndmcv"
+author: "Jan Linnenbrink"
+date: "2023-01-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+setwd("C:/0_Msc_Loek/M7_Fernerkundung/NNDMpaper-main/")
+knitr::opts_chunk$set(echo = TRUE)
+library("rnaturalearth")
+library(ggplot2)
+library(cowplot)
+library(gridExtra)
+library(ggthemes)
+library(dplyr)
+library(tidyr)
+library(forcats)
+library(sf)
+library(CAST)
+library(terra)
+
+library("cowplot")
+source("code/sim_utils.R")
+source("code/sim2_functions_global.R")
+
+sim_res <- read.csv("results/sim2_species/global_res.csv")
+
+sim_diff <- data.frame(rmse_rand = sim_res$RMSE_rand - sim_res$RMSE_surf,
+                       rmse_spatial = sim_res$RMSE_spatial - sim_res$RMSE_surf,
+                       rmse_nndm = sim_res$RMSE_nndm - sim_res$RMSE_surf,
+                       rmse_kndm = sim_res$RMSE_kndm - sim_res$RMSE_surf,
+                       AOA_rmse_rand = sim_res$RMSE_rand - sim_res$RMSE_AOA_surf_rand,
+                       AOA_rmse_spatial = sim_res$RMSE_spatial - sim_res$RMSE_AOA_surf_spatial,
+                       AOA_rmse_kndm = sim_res$RMSE_kndm - sim_res$RMSE_AOA_surf_kndm,
+                       AOA_rmse_nndm = sim_res$RMSE_nndm - sim_res$RMSE_AOA_surf_nndm,
+                       r2_rand = sim_res$R2_rand - sim_res$R2_surf,
+                       r2_spatial= sim_res$R2_spatial - sim_res$R2_surf,
+                       r2_nndm = sim_res$R2_nndm - sim_res$R2_surf,
+                       r2_kndm = sim_res$R2_kndm - sim_res$R2_surf,
+                       AOA_r2_rand = sim_res$R2_rand - sim_res$R2_AOA_surf_rand,
+                       AOA_r2_spatial= sim_res$R2_spatial - sim_res$R2_AOA_surf_spatial,
+                       AOA_r2_nndm = sim_res$R2_nndm - sim_res$R2_AOA_surf_nndm,
+                       AOA_r2_kndm = sim_res$R2_kndm - sim_res$R2_AOA_surf_kndm,
+                       mae_rand = sim_res$MAE_rand - sim_res$MAE_surf,
+                       mae_spatial = sim_res$MAE_spatial - sim_res$MAE_surf,
+                       mae_kndm = sim_res$MAE_kndm - sim_res$MAE_surf,
+                       mae_nndm = sim_res$MAE_nndm - sim_res$MAE_surf,
+                       AOA_mae_rand = sim_res$MAE_rand - sim_res$MAE_AOA_surf_rand,
+                       AOA_mae_spatial = sim_res$MAE_spatial - sim_res$MAE_AOA_surf_spatial,
+                       AOA_mae_kndm = sim_res$MAE_kndm - sim_res$MAE_AOA_surf_kndm,
+                       AOA_mae_nndm = sim_res$MAE_nndm - sim_res$MAE_AOA_surf_nndm,
+                       inAOA_rand = sim_res$in_AOA_rand,
+                       inAOA_spatial = sim_res$in_AOA_spatial,
+                       inAOA_nndm = sim_res$in_AOA_nndm,
+                       inAOA_kndm = sim_res$in_AOA_kndm,
+                       time_nndm = sim_res$time_ndm,
+                       time_nndm_mod = sim_res$time_ndm_mod,
+                       time_kndm = sim_res$time_kndm,
+                       time_kndm_mod = sim_res$time_kndm_mod,
+                       dsample = sim_res$dsample) |>
+  pivot_longer(!dsample) |>
+  mutate(distr = case_when(dsample == "sregular" ~ "Strong\nregular",
+                                     dsample == "wregular" ~ "Weak\nregular",
+                                     dsample == "random" ~ "Random",
+                                     dsample == "wclust" ~ "Weak\nclustered",
+                                     dsample == "sclust" ~ "Strong\nclustered"),
+         distr = as.factor(distr),
+         distr = fct_relevel(distr, c("Strong\nregular", "Weak\nregular", "Random",
+                                   "Weak\nclustered", "Strong\nclustered")),
+         CV_method = case_when(grepl("rand", name) ~ "random",
+                               grepl("spatial", name) ~ "spatial",
+                               grepl("nndm", name) ~ "NNDM",
+                               grepl("kndm", name) ~ "kNNDM"),
+         CV_method = fct_relevel(CV_method, "random",  "spatial","NNDM","kNNDM"),
+         group = case_when(startsWith(name, "rmse") ~ "RMSE",
+                           startsWith(name, "mae") ~ "MAE",
+                           startsWith(name, "r2") ~ "R^2",
+                           startsWith(name, "AOA_rmse") ~ "RMSE",
+                           startsWith(name, "AOA_r2") ~ "R^2",
+                           startsWith(name, "AOA_mae") ~ "MAE",
+                           startsWith(name, "inAOA") ~ "inAOA",
+                           endsWith(name, "_mod") ~ "time_mod",
+                           startsWith(name, "time") ~ "time"),
+         err_inside_AOA = ifelse(startsWith(name, "AOA"), "inside~AOA", "whole~area"))
+
+```
+
+## Methods
+
+### different clustering
+
+```{r figure 1}
+
+
+AOI <- st_read(dsn="./data/species_vdata.gpkg", layer="sampling_polygon")
+AOI_part <- st_buffer(AOI, -200000)
+
+
+
+set.seed(100)
+tpoints_rand <- sim2_samples(100, "random", AOI)
+tpoints_reg <- sim2_samples(100, "sregular", AOI)
+tpoints_cl <-  sim2_samples(100, "sclust", AOI)
+tpoints_part <- sim2_samples(100, "random", AOI_part)
+tpoints_cl$cl <- "clustered"
+tpoints_rand$cl <- "random"
+tpoints_reg$cl <- "regular"
+tpoints_part$cl <- "covers only part"
+
+tp <- rbind(tpoints_rand, tpoints_cl)
+
+ppoints <- sampleFromArea(AOI, 500,"geo",NULL,"regular") |>
+  st_transform(st_crs(tpoints_rand))
+
+set.seed(100)
+k_reg <- knndm(tpoints_reg, ppoints=ppoints)
+k_rand <- knndm(tpoints_rand, ppoints=ppoints)
+k_clust <- knndm(tpoints_cl, k = 2,  ppoints=ppoints, maxp=0.8)
+k_part <- knndm(tpoints_part, k = 2, ppoints=ppoints, maxp=0.8)
+
+pts.size <- 1
+ppts.alpha <- 0.5
+base.size <- 10
+
+
+reg_dist <- plot(k_reg) + 
+  scale_x_continuous(labels = function(x) format(x, scientific = TRUE),n.breaks = 3, limits=c(0,4*10^5)) +
+  theme_bw(base_size = base.size) +
+  theme(aspect.ratio = 1, legend.position = NaN) 
+  
+rand_dist <- plot(k_rand) + 
+  scale_x_continuous(labels = function(x) format(x, scientific = TRUE),n.breaks = 3, limits=c(0,4*10^5)) +
+  theme_bw(base_size = base.size) +
+  theme(aspect.ratio = 1, legend.position = NaN) 
+clust_dist <- plot(k_clust) + 
+  scale_x_continuous(labels = function(x) format(x, scientific = TRUE),n.breaks = 3, limits=c(0,4*10^5)) +
+  theme_bw(base_size = base.size) +
+  theme(aspect.ratio = 1, legend.position = NaN) 
+part_dist <- plot(k_part) + 
+  scale_x_continuous(labels = function(x) format(x, scientific = TRUE),n.breaks = 3, limits=c(0,4*10^5)) +
+  theme_bw(base_size = base.size) +
+  theme(aspect.ratio = 1, legend.position = NaN) 
+legend_bottom <- get_legend(rand_dist+
+                              guides(color = guide_legend(nrow = 1)) +
+                              theme(legend.position = "bottom"))
+
+
+
+pts_cov_part <- ggplot() +
+  geom_sf(data=AOI, alpha=0) +
+  geom_sf(data=ppoints, size=0.2, alpha=ppts.alpha) +
+  geom_sf(data=tpoints_part, aes(color=as.factor(k_part$clusters)), size=pts.size) +
+  scale_color_manual(values=c("blue","orange")) +
+    scale_x_continuous(breaks=c(-8,0)) +
+    scale_y_continuous(breaks=c(38,42)) +
+  theme_bw(base_size = base.size) +
+    theme(legend.position = "None") +
+  facet_wrap(~cl)
+
+(pts_cl_pl <- ggplot() +
+  geom_sf(data=AOI, alpha=0) +
+  geom_sf(data=ppoints, size=0.2, alpha=ppts.alpha) +
+  geom_sf(data=tpoints_cl, aes(color=as.factor(k_clust$clusters)), size=pts.size) +
+    scale_color_manual(values = c("blue","orange")) +
+    scale_x_continuous(breaks=c(-8,0)) +
+    scale_y_continuous(breaks=c(38,42)) +
+  theme_bw(base_size = base.size) +
+    theme(legend.position = "None") +
+  facet_wrap(~cl))
+
+pts_reg_pl <- ggplot() +
+  geom_sf(data=AOI, alpha=0) +
+  geom_sf(data=ppoints, size=0.2, alpha=ppts.alpha) +
+  geom_sf(data=tpoints_reg, aes(color=as.factor(k_reg$clusters)), size=pts.size) +
+  scale_color_manual(values= rainbow(10)) +
+  scale_x_continuous(breaks=c(-8,0)) +
+    scale_y_continuous(breaks=c(38,42)) +
+  theme_bw(base_size = base.size) +
+    theme(legend.position = "None") +
+  facet_wrap(~cl)
+
+pts_rand_pl <- ggplot() +
+  geom_sf(data=AOI, alpha=0) +
+  geom_sf(data=ppoints, size=0.2, alpha=ppts.alpha) +
+  geom_sf(data=tpoints_rand, aes(color=as.factor(k_rand$clusters)), size=pts.size) +
+  scale_color_manual(values= rainbow(10)) +
+  scale_x_continuous(breaks=c(-8,0)) +
+    scale_y_continuous(breaks=c(38,42)) +
+  theme_bw(base_size = base.size) +
+    theme(legend.position = "None") +
+  facet_wrap(~cl)
+
+top_row <- plot_grid(pts_reg_pl, pts_rand_pl, pts_cl_pl, pts_cov_part, nrow=1)
+bottom_row <- plot_grid(reg_dist, rand_dist,  clust_dist, part_dist, 
+                        NULL, NULL, legend_bottom, NULL, NULL,
+                        ncol=4, nrow=3, rel_heights = c(1,0.2,1))
+comb_pl <- plot_grid(top_row,bottom_row,nrow=2,rel_heights = c(1,1.5))
+ggsave("figures/example_knndmCV.pdf", comb_pl, height = 15, width=20, units="cm")
+
+```
+
+### method knndm
+```{r figure 2}
+wgrid <- st_read(dsn="data/species_vdata.gpkg", layer="landscape_grid")
+AOI <- st_read(dsn="./data/species_vdata.gpkg", layer="sampling_polygon") |> 
+  st_transform(st_crs(wgrid))
+#source("c:/github/dev/pnndm.R")
+set.seed(10)
+tpoints <-  sim2_samples(100, "sclust", AOI)
+ppoints <- st_sample(AOI, 1000, type = "regular")
+tpoints <- st_transform(tpoints, st_crs(ppoints))
+AOI <- st_transform(AOI, st_crs(ppoints))
+
+k <- 2
+maxp <- 0.8
+
+# Gj: NN distance function for a cluster per point, i.e. LOO CV
+tcoords <- sf::st_coordinates(tpoints)[,1:2]
+Gj <- c(FNN::knn.dist(tcoords, k = 1))
+
+# Gij: prediction to training NN distances
+Gij <- c(FNN::knnx.dist(query = sf::st_coordinates(ppoints)[,1:2],
+                          data = tcoords, k = 1))
+
+# Build grid of number of clusters to try - we sample low numbers more intensively
+clustgrid <- data.frame(nk = as.integer(round(exp(seq(log(k), log(nrow(tpoints)-1),
+                                                          length.out = 6)))))
+clustgrid$W <- NA
+clustgrid <- clustgrid[!duplicated(clustgrid$nk),]
+
+clustgroups=Gjstar_i <- list()
+
+j = 0
+for(nk in clustgrid$nk){
+
+      # Cut nk clusters
+      clust_nk <- stats::kmeans(tcoords, nk)$cluster
+      tabclust <- as.data.frame(table(clust_nk))
+      tabclust <- tabclust[order(tabclust$Freq, decreasing=T),]
+      tabclust$clust_k <- NA
+
+      # We don't merge big clusters
+      clust_i <- 1
+      for(i in 1:nrow(tabclust)){
+        if(tabclust$Freq[i] >= nrow(tpoints)/k){
+          tabclust$clust_k[i] <- clust_i
+          clust_i <- clust_i + 1
+        }
+      }
+      rm("clust_i")
+      clust_i <- setdiff(1:k, unique(tabclust$clust_k))
+      tabclust$clust_k[is.na(tabclust$clust_k)] <- rep(clust_i, ceiling(nk/length(clust_i)))[1:sum(is.na(tabclust$clust_k))]
+      tabclust2 <- data.frame(ID = 1:length(clust_nk), clust_nk = clust_nk)
+      tabclust2 <- merge(tabclust2, tabclust, by = "clust_nk")
+      tabclust2 <- tabclust2[order(tabclust2$ID),]
+      clust_k <- tabclust2$clust_k
+      
+      j <- j+1
+      
+      print(j)
+      # Compute statistic if not exceeding limit
+      if(!any(table(clust_k)/length(clust_k)>maxp)){
+        Gjstar_i[[j]] <- distclust(tcoords, clust_k)
+        clustgrid$W[clustgrid$nk==nk] <- twosamples::wass_stat(Gjstar_i[[j]], Gij)
+        clustgroups[[paste0("nk", nk)]] <- clust_k
+      }
+}
+
+pts_cl <- st_sf(do.call("cbind.data.frame",clustgroups), geom=st_geometry(tpoints))
+W <- clustgrid$W
+
+
+df <- lapply(Gjstar_i, function(x) list(x,Gij,Gj))
+df <- lapply(df, function(x) {names(x) <- c("Gjstar","Gij","Gj");return(x)})
+
+# plot
+plot.knndm <- function(x, ...){
+
+  # Prepare data for plotting: Gij function
+  Gij_df <- data.frame(r=x$Gij[order(x$Gij)])
+  Gij_df$Function <- "1_Gij(r)"
+
+  # Prepare data for plotting: Gjstar function
+  Gjstar_df <- data.frame(r=x$Gjstar[order(x$Gjstar)])
+  Gjstar_df$Function <- "2_Gjstar(r)"
+
+  # Prepare data for plotting: G function
+  Gj_df <- data.frame(r=x$Gj[order(x$Gj)])
+  Gj_df$Function <- "3_Gj(r)"
+
+  # Merge data for plotting
+  Gplot <- rbind(Gij_df, Gjstar_df, Gj_df)
+
+  # Plot
+  ggplot2::ggplot(data=Gplot, ggplot2::aes_string(x="r", group="Function", col="Function")) +
+    ggplot2::geom_vline(xintercept=0, lwd = 0.1) +
+    ggplot2::geom_hline(yintercept=0, lwd = 0.1) +
+    ggplot2::geom_hline(yintercept=1, lwd = 0.1) +
+    ggplot2::stat_ecdf(geom = "step", lwd = 1) +
+    ggplot2::scale_colour_manual(values=c("#000000", "#E69F00", "#56B4E9"),
+                                 labels=c(expression(hat(G)[ij](r)),
+                                          expression(hat(G)[j]^"*"*"(r)"),
+                                          expression(hat(G)[j](r)))) +
+    ggplot2::ylab(expression(paste(hat(G)[ij](r), ", ",
+                                   hat(G)[j]^"*"*"(r)", ", ",
+                                   hat(G)[j](r))))
+}
+
+
+dist_plts <- mapply(function(x,y){
+  plot.knndm(x) +
+    ggtitle(paste0("WS.dist=", round(y))) +
+    scale_x_continuous(limits=c(0,4*10^5), n.breaks = 3) +
+    ylab("") +
+    theme_bw() +
+    theme(aspect.ratio = 1,
+          legend.position = NaN,
+          title=element_text(size=9))
+}, x=df, y=W, SIMPLIFY = FALSE)
+dst_pl <- grid.arrange(grobs = dist_plts, nrow = 1)
+
+pts_list <- apply(st_drop_geometry(pts_cl), 2, function(x) x, simplify = FALSE)
+pts_list_geo <- lapply(pts_list, function(x) st_sf(x, geom=pts_cl$geom))
+
+pt.size <- 0.8
+
+title_p <- clustgrid$nk
+
+point_pl <- mapply(function(x,y) {
+  ggplot() +
+    ggtitle(paste0("q=",y)) +
+    geom_sf(data=AOI, alpha=0) +
+    geom_sf(data=x, aes(col = as.factor(x[[1]])), size=pt.size)+
+    scale_color_manual(values=c("blue", "red")) +
+    scale_shape_manual(values=rep(16, length(unique(x[[1]])))) +
+    scale_x_continuous(breaks=c(-8,0)) +
+    scale_y_continuous(breaks=c(38,42)) +
+    theme_bw()+
+    theme(legend.position = NaN,
+          title = element_text(size=9))
+}, x=pts_list_geo,y=title_p, SIMPLIFY = FALSE)
+
+pts_pl <- grid.arrange(grobs= point_pl, nrow=1)
+
+bottom_row <- plot_grid(dst_pl)
+top_row <- plot_grid(pts_pl)
+legend_bottom <- get_legend(dist_plts[[1]] +
+                              guides(color = guide_legend(nrow = 1)) +
+                              theme(legend.position = "bottom"))
+c <- plot_grid(top_row, NULL, bottom_row, NULL, legend_bottom, nrow=5,rel_heights = c(1,-0.35,1,-0.2,0.2))
+ggsave("figures/method_knndm.pdf",c, height=5, width=12)
+
+
+```
+
+
+## Results
+
+```{r figure 3}
+lw <- 0.6
+w <- 0.45
+base.size <- 16
+(diff_rmse_plot <- ggplot(sim_diff[sim_diff$group=="RMSE" & sim_diff$err_inside_AOA == "whole~area",],
+                          aes(x=distr, y=value,colour=CV_method)) +
+    geom_boxplot(fill=NA, lwd=lw, width=w,position=position_dodge(0.6)) +
+    scale_color_colorblind(name="CV method") +
+    geom_hline(aes(yintercept=0)) +
+    scale_y_continuous(limits=c(-0.2,0.2)) +
+    xlab("Sampling distribution") +
+    ylab(expression(CV - true~RMSE)) +
+    theme_bw(base_size = base.size) +
+    theme(legend.position = "right"))
+ggsave("figures/comp_rmse_global.pdf", diff_rmse_plot, height=5, width=11)
+```
+
+
+
+```{r figure appendix 1}
+lw <- 0.6
+w <- 0.45
+#expression(paste(RMSE [CV] - RMSE [True], "for prediction area"))
+
+base.size <- 15
+(diff_rmse_plot <- ggplot(sim_diff[sim_diff$group=="RMSE" & sim_diff$err_inside_AOA == "whole~area",],
+                          aes(x=distr, y=value,colour=CV_method)) +
+    geom_boxplot(fill=NA, lwd=lw, width=w,position=position_dodge(0.6)) +
+    scale_color_colorblind(name="CV method") +
+    geom_hline(aes(yintercept=0)) +
+    scale_y_continuous(limits=c(-0.2,0.2)) +
+    xlab("") +
+    ylab(expression(CV - true~RMSE)) +
+    theme_bw(base_size = base.size) +
+    theme(legend.position = "None",
+          axis.text.x = element_blank()))
+
+(diff_rmse_inAOA <- ggplot(sim_diff[sim_diff$group=="RMSE" & sim_diff$err_inside_AOA == "inside~AOA", ],
+                          aes(x=distr, y=value,colour=CV_method)) +
+    geom_boxplot(fill=NA, lwd=lw, width=w,position=position_dodge(0.6)) +
+    scale_color_colorblind(name="CV method",) +
+    geom_hline(aes(yintercept=0)) +
+    scale_y_continuous(limits=c(-0.2,0.2)) +
+    xlab("") +
+    ylab(expression(CV - true~RMSE~inside~AOA)) +
+    theme_bw(base_size = base.size) +
+    theme(legend.position = "None",
+          axis.text.x = element_blank()))
+
+(diff_aoa_plot <- ggplot(sim_diff[sim_diff$group=="inAOA",],
+                          aes(x=distr, y=value,colour=CV_method)) +
+    geom_boxplot(fill=NA, lwd=lw, width=w,position=position_dodge(0.6)) +
+    scale_color_colorblind(name="CV method") +
+    scale_y_continuous(limits=c(0,100)) +
+    xlab("Sampling distribution") +
+    ylab("cells inside AOA [%]") +
+    theme_bw(base_size = base.size) +
+    theme(legend.position = "None"))
+
+legend_right <- get_legend(diff_aoa_plot +
+                              guides(color = guide_legend(nrow = 4)) +
+                              theme(legend.position = "right"))
+
+pgr <- plot_grid(diff_rmse_plot, NULL, NULL, NULL,  
+                 diff_rmse_inAOA, legend_right, NULL, NULL,  
+                 diff_aoa_plot, NULL,NULL, NULL, 
+                 nrow=3, rel_widths = c(1, 0.3, 0.3,-0.3), axis="l", align = "v")
+ggsave("figures/comp_rmse_AOA_global.pdf", pgr, height=8, width=8)
+
+```
+
+```{r figure appendix 2}
+lw <- 0.6
+w <- 0.45
+base.size <- 15
+
+facet.labs <- list(
+  'MAE'="MAE",
+  'R^2'=expression(R^2),
+  'RMSE'="RMSE"
+)
+
+pl <- ggplot(sim_diff[!sim_diff$group %in% c("inAOA", "time", "time_mod"),],
+                          aes(x=distr, y=value,colour=CV_method)) +
+    geom_boxplot(fill=NA, lwd=lw, width=w,position=position_dodge(0.6)) +
+    scale_color_colorblind(name="CV method") +
+    geom_hline(aes(yintercept=0)) +
+    xlab("Sampling distribution") +
+    ylab("CV - true error") +
+    theme_bw(base_size = base.size) +
+    theme(legend.position = "right") +
+  facet_grid(rows=vars(group), cols = vars(err_inside_AOA), scales="free_y",
+             labeller=label_parsed)
+
+
+ggsave("figures/comp_all_AOA_global.pdf", pl, height=10, width=12)
+
+```
+
+
+```{r appendix 3}
+cor_res <- read.csv("results/sim2_species/cor_res.csv")
+cor_diff <- data.frame(rmse_diff = cor_res$RMSE_kndm - cor_res$RMSE_surf,
+                       r2_diff = cor_res$R2_kndm - cor_res$R2_surf,
+                       mae_diff = cor_res$MAE_kndm - cor_res$MAE_surf,
+                       ws = cor_res$WS,
+                       dsample = cor_res$dsample)
+
+
+m <- 0.5
+b.size <- 20
+(rmse <- ggplot(data=cor_diff, aes(x=ws)) +
+  geom_bin_2d(aes(y=abs(rmse_diff)), bins=30) +
+   scale_fill_viridis_b() +
+        scale_x_log10(breaks=c(10000,100000),labels = function(x) format(x, scientific = FALSE)) +
+   ylab(expression(CV - true~RMSE)) +
+    xlab("W") +
+  theme_bw(base_size=b.size) +
+  theme(aspect.ratio=1, legend.position = NaN,
+        plot.margin = unit(unit(rep(m,4), "cm"))))
+(mae <- ggplot(data=cor_diff, aes(ws)) +
+    geom_bin_2d(aes(y=abs(mae_diff)), bins=30) +
+    scale_fill_viridis_b() +
+        scale_x_log10(breaks=c(10000,100000),labels = function(x) format(x, scientific = FALSE)) +
+    ylab(expression(CV - true~MAE)) +
+    xlab("W") +
+    theme_bw(base_size=b.size) +
+    theme(aspect.ratio=1, legend.position = NaN,
+          plot.margin = unit(rep(m,4), "cm")))
+(r2 <- ggplot(data=cor_diff, aes(x=ws)) +
+    geom_bin_2d(aes(y=abs(r2_diff)), bins=30) +
+    scale_fill_viridis_b() +
+        scale_x_log10(breaks=c(10000,100000),labels = function(x) format(x, scientific = FALSE)) +
+    ylab(expression(CV - true~R^2)) +
+    xlab("W") +
+    theme_bw(base_size=b.size) +
+    theme(aspect.ratio=1, legend.position = NaN,
+        plot.margin = unit(unit(rep(m,4), "cm"))))
+
+legend_bottom <- get_legend(rmse +
+                              guides(color = guide_legend(nrow = 1)) +
+                              theme(legend.position = "bottom",
+                                    legend.key.width  = unit(1.5, "cm"),
+                                    legend.key.height  = unit(0.5, "cm"),
+                                    plot.margin = unit(c(0, 0, 0, 0), "cm")))
+top_row <- plot_grid(rmse, r2, mae, nrow=1)
+c <- plot_grid(top_row, NULL, legend_bottom, NULL, nrow=4,
+               rel_heights = c(1,-0.35,1,-0.4), rel_widths = c(1,1,5,1))
+c
+ggsave("figures/WS_err.pdf",c, height=5, width=12)
+
+```
+
+```{r appendix 4}
+lw <- 0.6
+w <- 0.45
+base.size <- 16
+
+time_stats <- sim_diff |> 
+    filter(group %in% c("time", "time_mod")) |> 
+    group_by(group,distr,CV_method) |> 
+    summarise(mean_time=mean(value))
+
+tb <- ggplot(time_stats, aes(y=CV_method, fill=group)) +
+    geom_col(aes(x=mean_time),width = 0.4)+
+  xlab("time [s]") +
+  ylab("CV method") +
+  scale_fill_discrete("", labels=c("function time", "modelling time")) +
+    theme_bw(base_size=15) +
+    theme(legend.position = "bottom") +
+    facet_wrap(~distr, nrow=1)
+
+ggsave("figures/times.pdf", tb, height=4, width=12)
+
+```
