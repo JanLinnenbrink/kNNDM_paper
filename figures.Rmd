@@ -30,34 +30,14 @@ sim_diff <- data.frame(rmse_rand = sim_res$RMSE_rand - sim_res$RMSE_surf,
                        rmse_spatial = sim_res$RMSE_spatial - sim_res$RMSE_surf,
                        rmse_nndm = sim_res$RMSE_nndm - sim_res$RMSE_surf,
                        rmse_kndm = sim_res$RMSE_kndm - sim_res$RMSE_surf,
-                       AOA_rmse_rand = sim_res$RMSE_rand - sim_res$RMSE_AOA_surf_rand,
-                       AOA_rmse_spatial = sim_res$RMSE_spatial - sim_res$RMSE_AOA_surf_spatial,
-                       AOA_rmse_kndm = sim_res$RMSE_kndm - sim_res$RMSE_AOA_surf_kndm,
-                       AOA_rmse_nndm = sim_res$RMSE_nndm - sim_res$RMSE_AOA_surf_nndm,
                        r2_rand = sim_res$R2_rand - sim_res$R2_surf,
                        r2_spatial= sim_res$R2_spatial - sim_res$R2_surf,
                        r2_nndm = sim_res$R2_nndm - sim_res$R2_surf,
                        r2_kndm = sim_res$R2_kndm - sim_res$R2_surf,
-                       AOA_r2_rand = sim_res$R2_rand - sim_res$R2_AOA_surf_rand,
-                       AOA_r2_spatial= sim_res$R2_spatial - sim_res$R2_AOA_surf_spatial,
-                       AOA_r2_nndm = sim_res$R2_nndm - sim_res$R2_AOA_surf_nndm,
-                       AOA_r2_kndm = sim_res$R2_kndm - sim_res$R2_AOA_surf_kndm,
                        mae_rand = sim_res$MAE_rand - sim_res$MAE_surf,
                        mae_spatial = sim_res$MAE_spatial - sim_res$MAE_surf,
                        mae_kndm = sim_res$MAE_kndm - sim_res$MAE_surf,
                        mae_nndm = sim_res$MAE_nndm - sim_res$MAE_surf,
-                       AOA_mae_rand = sim_res$MAE_rand - sim_res$MAE_AOA_surf_rand,
-                       AOA_mae_spatial = sim_res$MAE_spatial - sim_res$MAE_AOA_surf_spatial,
-                       AOA_mae_kndm = sim_res$MAE_kndm - sim_res$MAE_AOA_surf_kndm,
-                       AOA_mae_nndm = sim_res$MAE_nndm - sim_res$MAE_AOA_surf_nndm,
-                       inAOA_rand = sim_res$in_AOA_rand,
-                       inAOA_spatial = sim_res$in_AOA_spatial,
-                       inAOA_nndm = sim_res$in_AOA_nndm,
-                       inAOA_kndm = sim_res$in_AOA_kndm,
-                       time_nndm = sim_res$time_ndm,
-                       time_nndm_mod = sim_res$time_ndm_mod,
-                       time_kndm = sim_res$time_kndm,
-                       time_kndm_mod = sim_res$time_kndm_mod,
                        dsample = sim_res$dsample) |>
   pivot_longer(!dsample) |>
   mutate(distr = case_when(dsample == "sregular" ~ "Strong\nregular",
@@ -75,14 +55,7 @@ sim_diff <- data.frame(rmse_rand = sim_res$RMSE_rand - sim_res$RMSE_surf,
          CV_method = fct_relevel(CV_method, "random 10-fold",  "spatial 10-fold","NNDM LOO","kNNDM 10-fold"),
          group = case_when(startsWith(name, "rmse") ~ "RMSE",
                            startsWith(name, "mae") ~ "MAE",
-                           startsWith(name, "r2") ~ "R^2",
-                           startsWith(name, "AOA_rmse") ~ "RMSE",
-                           startsWith(name, "AOA_r2") ~ "R^2",
-                           startsWith(name, "AOA_mae") ~ "MAE",
-                           startsWith(name, "inAOA") ~ "inAOA",
-                           endsWith(name, "_mod") ~ "time_mod",
-                           startsWith(name, "time") ~ "time"),
-         err_inside_AOA = ifelse(startsWith(name, "AOA"), "inside~AOA", "whole~area"))
+                           startsWith(name, "r2") ~ "R^2"))
 
 ```
 
@@ -437,7 +410,6 @@ w <- 0.45
 #expression(paste(RMSE [CV] - RMSE [True], "for prediction area"))
 
 base.size <- 15
-sim_diff <- sim_diff[sim_diff$err_inside_AOA == "whole~area",]
 (diff_rmse <- ggplot(sim_diff[sim_diff$group=="RMSE",],
                           aes(x=distr, y=value,colour=CV_method)) +
     geom_boxplot(fill=NA, lwd=lw, width=w,position=position_dodge(0.6)) +
