@@ -6,7 +6,7 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-setwd("C:/0_Msc_Loek/M7_Fernerkundung/NNDMpaper-main/")
+setwd("C:/git/kNNDM_paper/")
 knitr::opts_chunk$set(echo = TRUE)
 library("rnaturalearth")
 library(ggplot2)
@@ -21,10 +21,10 @@ library(CAST)
 library(terra)
 
 library("cowplot")
-source("code/sim_utils.R")
-source("code/sim2_functions_global.R")
+source("code/simulation/sim_utils.R")
+source("code/simulation/sim_functions.R")
 
-sim_res <- read.csv("results/sim2_species/global_res.csv")
+sim_res <- read.csv("results/simulation/sim_res.csv")
 
 sim_diff <- data.frame(rmse_rand = sim_res$RMSE_rand - sim_res$RMSE_surf,
                        rmse_spatial = sim_res$RMSE_spatial - sim_res$RMSE_surf,
@@ -68,11 +68,11 @@ sim_diff <- data.frame(rmse_rand = sim_res$RMSE_rand - sim_res$RMSE_surf,
          distr = as.factor(distr),
          distr = fct_relevel(distr, c("Strong\nregular", "Weak\nregular", "Random",
                                    "Weak\nclustered", "Strong\nclustered")),
-         CV_method = case_when(grepl("rand", name) ~ "random",
-                               grepl("spatial", name) ~ "spatial",
-                               grepl("nndm", name) ~ "NNDM",
-                               grepl("kndm", name) ~ "kNNDM"),
-         CV_method = fct_relevel(CV_method, "random",  "spatial","NNDM","kNNDM"),
+         CV_method = case_when(grepl("rand", name) ~ "random 10-fold",
+                               grepl("spatial", name) ~ "spatial 10-fold",
+                               grepl("nndm", name) ~ "NNDM LOO",
+                               grepl("kndm", name) ~ "kNNDM 10-fold"),
+         CV_method = fct_relevel(CV_method, "random 10-fold",  "spatial 10-fold","NNDM LOO","kNNDM 10-fold"),
          group = case_when(startsWith(name, "rmse") ~ "RMSE",
                            startsWith(name, "mae") ~ "MAE",
                            startsWith(name, "r2") ~ "R^2",
@@ -102,102 +102,161 @@ set.seed(100)
 tpoints_rand <- sim2_samples(100, "random", AOI)
 tpoints_reg <- sim2_samples(100, "sregular", AOI)
 tpoints_cl <-  sim2_samples(100, "sclust", AOI)
-tpoints_part <- sim2_samples(100, "random", AOI_part)
 tpoints_cl$cl <- "clustered"
 tpoints_rand$cl <- "random"
 tpoints_reg$cl <- "regular"
-tpoints_part$cl <- "covers only part"
 
 tp <- rbind(tpoints_rand, tpoints_cl)
 
-ppoints <- sampleFromArea(AOI, 500,"geo",NULL,"regular") |>
+ppoints <- st_sample(AOI, 500, type = "regular") |>
   st_transform(st_crs(tpoints_rand))
 
 set.seed(100)
 k_reg <- knndm(tpoints_reg, ppoints=ppoints)
 k_rand <- knndm(tpoints_rand, ppoints=ppoints)
 k_clust <- knndm(tpoints_cl, k = 2,  ppoints=ppoints, maxp=0.8)
-k_part <- knndm(tpoints_part, k = 2, ppoints=ppoints, maxp=0.8)
 
 pts.size <- 1
 ppts.alpha <- 0.5
-base.size <- 10
+base.size <- 12
 
-
-reg_dist <- plot(k_reg) + 
-  scale_x_continuous(labels = function(x) format(x, scientific = TRUE),n.breaks = 3, limits=c(0,4*10^5)) +
-  theme_bw(base_size = base.size) +
-  theme(aspect.ratio = 1, legend.position = NaN) 
+# plot
+plot.knndm.partly <- function(x, ...){
   
-rand_dist <- plot(k_rand) + 
+
+# Prepare data for plotting: Gij function
+Gij_df <- data.frame(r=x$Gij[order(x$Gij)])
+Gij_df$Function <- "1_Gij(r)"
+
+# Prepare data for plotting: G function
+Gj_df <- data.frame(r=x$Gj[order(x$Gj)])
+Gj_df$Function <- "2_Gj(r)"
+
+# Merge data for plotting
+Gplot <- rbind(Gij_df, Gj_df)
+
+n = length(Gij_df$r)
+dfx = data.frame(sort(Gij_df$r),cumsum(rep(1/n,n)),"x")
+n1=length(Gj_df$r)
+dfy = data.frame(sort(Gj_df$r),cumsum(rep(1/n1,n1)),"y")
+colnames(dfx) = colnames(dfy) = c("point","ecdf","sample")
+df = rbind(dfy,dfx)
+
+combined = sort(c(Gij_df$r,Gj_df$r))
+
+midpoints = combined[-(2*n)]+diff(combined)/2
+fhat = ehat = dhat = width = numeric(2*n-1)
+for (i in 1:(2*n-1)) {
+  point = midpoints[i]
+  width[i] = (point-combined[i])*2
+  fhat[i] = mean(Gj_df$r < point)
+  ehat[i] = mean(Gij_df$r < point)
+  dhat[i] = mean(combined < point)
+}
+gap = fhat-ehat
+
+
+x1 = midpoints-0.5*width
+x2 = midpoints+0.5*width
+y1 = ehat
+y2 = fhat
+block = 1:(2*n-1)
+alpha = 1/(dhat*(1-dhat))
+
+df3.1 = cbind(x1,y1,block,alpha)
+df3.2 = cbind(x1,y2,block,alpha)
+df3.3 = cbind(x2,y2,block,alpha)
+df3.4 = cbind(x2,y1,block,alpha)
+
+df3 = rbind(df3.1,df3.2,df3.3,df3.4)
+colnames(df3) = c("point","ecdf","block","weights")
+df3 = as_tibble(df3) %>% arrange(block)
+
+# Plot
+ggplot2::ggplot(data=Gplot) +
+  ggplot2::geom_vline(xintercept=0, lwd = 0.1, ggplot2::aes_string(x="r", group="Function", col="Function")) +
+  ggplot2::geom_hline(yintercept=0, lwd = 0.1, ggplot2::aes_string(x="r", group="Function", col="Function")) +
+  ggplot2::geom_hline(yintercept=1, lwd = 0.1, ggplot2::aes_string(x="r", group="Function", col="Function")) +
+  geom_polygon(data=df3,aes(x=point,y=ecdf,group=block),alpha=0.7, fill="orange") +
+  ggplot2::stat_ecdf(geom = "step", lwd = 1, ggplot2::aes_string(x="r", group="Function", col="Function")) +
+  ggplot2::scale_colour_manual(values=c("#000000", "#56B4E9"),
+                                 labels=c(expression(hat(G)[ij](r)),
+                                          expression(hat(G)[j]^"*"*"(r,L)"),
+                                          expression(hat(G)[j](r)))) +
+    ggplot2::ylab(expression(paste(hat(G)[ij](r), ", ",
+                                   hat(G)[j]^"*"*"(r,L)", ", ",
+                                   hat(G)[j](r))))
+}
+
+Ws <- lapply(list(k_reg, k_rand,k_clust), function(x) twosamples::wass_stat(x$Gj, x$Gij))
+
+reg_dist <- plot.knndm.partly(k_reg) +
   scale_x_continuous(labels = function(x) format(x, scientific = TRUE),n.breaks = 3, limits=c(0,4*10^5)) +
+  geom_text(aes(label=paste("W=", round(Ws[[1]])), x=12^5,y=0.6), size=5, col="orange") +
+  xlab("r") +
   theme_bw(base_size = base.size) +
-  theme(aspect.ratio = 1, legend.position = NaN) 
-clust_dist <- plot(k_clust) + 
+  theme(aspect.ratio = 1, legend.position = NaN,plot.margin = unit(rep(0.2,4), "cm")) 
+ 
+rand_dist <- plot.knndm.partly(k_rand) + 
   scale_x_continuous(labels = function(x) format(x, scientific = TRUE),n.breaks = 3, limits=c(0,4*10^5)) +
+  geom_text(aes(label=paste("W=", round(Ws[[2]])), x=12^5,y=0.6), size=5, col="orange") +
+  xlab("r") +
   theme_bw(base_size = base.size) +
-  theme(aspect.ratio = 1, legend.position = NaN) 
-part_dist <- plot(k_part) + 
+  theme(aspect.ratio = 1, legend.position = NaN,plot.margin = unit(rep(0.2,4), "cm")) 
+clust_dist <- plot.knndm.partly(k_clust) + 
   scale_x_continuous(labels = function(x) format(x, scientific = TRUE),n.breaks = 3, limits=c(0,4*10^5)) +
+  xlab("r") +
+  geom_text(aes(label=paste("W=", round(Ws[[3]])), x=12^5,y=0.6), size=5, col="orange") +
   theme_bw(base_size = base.size) +
-  theme(aspect.ratio = 1, legend.position = NaN) 
+  theme(aspect.ratio = 1, legend.position = NaN,plot.margin = unit(rep(0.2,4), "cm")) 
 legend_bottom <- get_legend(rand_dist+
                               guides(color = guide_legend(nrow = 1)) +
                               theme(legend.position = "bottom"))
 
-
-
-pts_cov_part <- ggplot() +
-  geom_sf(data=AOI, alpha=0) +
-  geom_sf(data=ppoints, size=0.2, alpha=ppts.alpha) +
-  geom_sf(data=tpoints_part, aes(color=as.factor(k_part$clusters)), size=pts.size) +
-  scale_color_manual(values=c("blue","orange")) +
-    scale_x_continuous(breaks=c(-8,0)) +
-    scale_y_continuous(breaks=c(38,42)) +
-  theme_bw(base_size = base.size) +
-    theme(legend.position = "None") +
-  facet_wrap(~cl)
-
 (pts_cl_pl <- ggplot() +
   geom_sf(data=AOI, alpha=0) +
   geom_sf(data=ppoints, size=0.2, alpha=ppts.alpha) +
-  geom_sf(data=tpoints_cl, aes(color=as.factor(k_clust$clusters)), size=pts.size) +
+  geom_sf(data=tpoints_cl,size=pts.size) +
     scale_color_manual(values = c("blue","orange")) +
     scale_x_continuous(breaks=c(-8,0)) +
     scale_y_continuous(breaks=c(38,42)) +
   theme_bw(base_size = base.size) +
-    theme(legend.position = "None") +
+    theme(legend.position = "None",
+          strip.text.x = element_text(size = 12),
+          plot.margin = unit(rep(0.2,4), "cm")) +
   facet_wrap(~cl))
 
 pts_reg_pl <- ggplot() +
   geom_sf(data=AOI, alpha=0) +
   geom_sf(data=ppoints, size=0.2, alpha=ppts.alpha) +
-  geom_sf(data=tpoints_reg, aes(color=as.factor(k_reg$clusters)), size=pts.size) +
+  geom_sf(data=tpoints_reg, size=pts.size) +
   scale_color_manual(values= rainbow(10)) +
   scale_x_continuous(breaks=c(-8,0)) +
     scale_y_continuous(breaks=c(38,42)) +
   theme_bw(base_size = base.size) +
-    theme(legend.position = "None") +
+    theme(legend.position = "None",
+          strip.text.x = element_text(size = 12),
+          plot.margin = unit(rep(0.2,4), "cm")) +
   facet_wrap(~cl)
 
 pts_rand_pl <- ggplot() +
   geom_sf(data=AOI, alpha=0) +
   geom_sf(data=ppoints, size=0.2, alpha=ppts.alpha) +
-  geom_sf(data=tpoints_rand, aes(color=as.factor(k_rand$clusters)), size=pts.size) +
-  scale_color_manual(values= rainbow(10)) +
+  geom_sf(data=tpoints_rand, size=pts.size) +
   scale_x_continuous(breaks=c(-8,0)) +
     scale_y_continuous(breaks=c(38,42)) +
   theme_bw(base_size = base.size) +
-    theme(legend.position = "None") +
+    theme(legend.position = "None",
+          strip.text.x = element_text(size = 12),
+          plot.margin = unit(rep(0.2,4), "cm")) +
   facet_wrap(~cl)
 
-top_row <- plot_grid(pts_reg_pl, pts_rand_pl, pts_cl_pl, pts_cov_part, nrow=1)
-bottom_row <- plot_grid(reg_dist, rand_dist,  clust_dist, part_dist, 
-                        NULL, NULL, legend_bottom, NULL, NULL,
-                        ncol=4, nrow=3, rel_heights = c(1,0.2,1))
-comb_pl <- plot_grid(top_row,bottom_row,nrow=2,rel_heights = c(1,1.5))
-ggsave("figures/example_knndmCV.pdf", comb_pl, height = 15, width=20, units="cm")
-
+top_row <- plot_grid(pts_reg_pl, pts_rand_pl, pts_cl_pl, nrow=1)
+bottom_row <- plot_grid(reg_dist, rand_dist,  clust_dist, nrow=1)
+comb_pl <- plot_grid(NULL, top_row, NULL, bottom_row, NULL, legend_bottom, NULL,  
+                     nrow=7, rel_heights = c(-0.22,1, -0.42,1,-0.7,1,-0.45))
+ggsave("figures/example.png", comb_pl, height = 12, width=20, units="cm")
+#
 ```
 
 ### method knndm
@@ -231,6 +290,9 @@ clustgrid <- clustgrid[!duplicated(clustgrid$nk),]
 
 clustgroups=Gjstar_i <- list()
 
+# Compute 1st PC for ordering clusters
+pcacoords <- stats::prcomp(tcoords, center = TRUE, scale. = FALSE, rank = 1)
+
 j = 0
 for(nk in clustgrid$nk){
 
@@ -239,6 +301,15 @@ for(nk in clustgrid$nk){
       tabclust <- as.data.frame(table(clust_nk))
       tabclust <- tabclust[order(tabclust$Freq, decreasing=T),]
       tabclust$clust_k <- NA
+
+      # compute cluster centroids and apply PC loadings to shuffle along the 1st dimension
+      centr_tpoints <- sapply(tabclust$clust_nk, function(x){
+        centrpca <- matrix(apply(tcoords[clust_nk %in% x, , drop=FALSE], 2, mean), nrow = 1)
+        colnames(centrpca) <- colnames(tcoords)
+        return(predict(pcacoords, centrpca))
+      })
+      tabclust$centrpca <- centr_tpoints
+      tabclust <- tabclust[order(tabclust$centrpca),]
 
       # We don't merge big clusters
       clust_i <- 1
@@ -249,6 +320,8 @@ for(nk in clustgrid$nk){
         }
       }
       rm("clust_i")
+      
+      # And we merge the remaining into k groups
       clust_i <- setdiff(1:k, unique(tabclust$clust_k))
       tabclust$clust_k[is.na(tabclust$clust_k)] <- rep(clust_i, ceiling(nk/length(clust_i)))[1:sum(is.na(tabclust$clust_k))]
       tabclust2 <- data.frame(ID = 1:length(clust_nk), clust_nk = clust_nk)
@@ -259,13 +332,16 @@ for(nk in clustgrid$nk){
       j <- j+1
       
       print(j)
-      # Compute statistic if not exceeding limit
+      # Compute W statistic if not exceeding maxp
       if(!any(table(clust_k)/length(clust_k)>maxp)){
         Gjstar_i[[j]] <- distclust(tcoords, clust_k)
         clustgrid$W[clustgrid$nk==nk] <- twosamples::wass_stat(Gjstar_i[[j]], Gij)
         clustgroups[[paste0("nk", nk)]] <- clust_k
       }
+      
 }
+
+
 
 pts_cl <- st_sf(do.call("cbind.data.frame",clustgroups), geom=st_geometry(tpoints))
 W <- clustgrid$W
@@ -300,17 +376,16 @@ plot.knndm <- function(x, ...){
     ggplot2::stat_ecdf(geom = "step", lwd = 1) +
     ggplot2::scale_colour_manual(values=c("#000000", "#E69F00", "#56B4E9"),
                                  labels=c(expression(hat(G)[ij](r)),
-                                          expression(hat(G)[j]^"*"*"(r)"),
+                                          expression(hat(G)[j]^"*"*"(r,L)"),
                                           expression(hat(G)[j](r)))) +
     ggplot2::ylab(expression(paste(hat(G)[ij](r), ", ",
-                                   hat(G)[j]^"*"*"(r)", ", ",
+                                   hat(G)[j]^"*"*"(r,L)", ", ",
                                    hat(G)[j](r))))
 }
 
-
 dist_plts <- mapply(function(x,y){
   plot.knndm(x) +
-    ggtitle(paste0("WS.dist=", round(y))) +
+    ggtitle(paste0("W=", round(y))) +
     scale_x_continuous(limits=c(0,4*10^5), n.breaks = 3) +
     ylab("") +
     theme_bw() +
@@ -329,7 +404,7 @@ title_p <- clustgrid$nk
 
 point_pl <- mapply(function(x,y) {
   ggplot() +
-    ggtitle(paste0("q=",y)) +
+    ggtitle(paste0("q=", y)) +
     geom_sf(data=AOI, alpha=0) +
     geom_sf(data=x, aes(col = as.factor(x[[1]])), size=pt.size)+
     scale_color_manual(values=c("blue", "red")) +
@@ -348,10 +423,9 @@ top_row <- plot_grid(pts_pl)
 legend_bottom <- get_legend(dist_plts[[1]] +
                               guides(color = guide_legend(nrow = 1)) +
                               theme(legend.position = "bottom"))
-c <- plot_grid(top_row, NULL, bottom_row, NULL, legend_bottom, nrow=5,rel_heights = c(1,-0.35,1,-0.2,0.2))
+c <- plot_grid(NULL,top_row, NULL, bottom_row, NULL, legend_bottom, nrow=6,rel_heights = c(-0.25,1,-0.35,1,-0.2,0.2))
 ggsave("figures/method_knndm.pdf",c, height=5, width=12)
-
-
+#
 ```
 
 
@@ -360,104 +434,56 @@ ggsave("figures/method_knndm.pdf",c, height=5, width=12)
 ```{r figure 3}
 lw <- 0.6
 w <- 0.45
-base.size <- 16
-(diff_rmse_plot <- ggplot(sim_diff[sim_diff$group=="RMSE" & sim_diff$err_inside_AOA == "whole~area",],
-                          aes(x=distr, y=value,colour=CV_method)) +
-    geom_boxplot(fill=NA, lwd=lw, width=w,position=position_dodge(0.6)) +
-    scale_color_colorblind(name="CV method") +
-    geom_hline(aes(yintercept=0)) +
-    scale_y_continuous(limits=c(-0.2,0.2)) +
-    xlab("Sampling distribution") +
-    ylab(expression(CV - true~RMSE)) +
-    theme_bw(base_size = base.size) +
-    theme(legend.position = "right"))
-ggsave("figures/comp_rmse_global.pdf", diff_rmse_plot, height=5, width=11)
-```
-
-
-
-```{r figure appendix 1}
-lw <- 0.6
-w <- 0.45
 #expression(paste(RMSE [CV] - RMSE [True], "for prediction area"))
 
 base.size <- 15
-(diff_rmse_plot <- ggplot(sim_diff[sim_diff$group=="RMSE" & sim_diff$err_inside_AOA == "whole~area",],
+sim_diff <- sim_diff[sim_diff$err_inside_AOA == "whole~area",]
+(diff_rmse <- ggplot(sim_diff[sim_diff$group=="RMSE",],
                           aes(x=distr, y=value,colour=CV_method)) +
     geom_boxplot(fill=NA, lwd=lw, width=w,position=position_dodge(0.6)) +
     scale_color_colorblind(name="CV method") +
     geom_hline(aes(yintercept=0)) +
-    scale_y_continuous(limits=c(-0.2,0.2)) +
     xlab("") +
     ylab(expression(CV - true~RMSE)) +
     theme_bw(base_size = base.size) +
-    theme(legend.position = "None",
-          axis.text.x = element_blank()))
+    theme(legend.position = "None"))
 
-(diff_rmse_inAOA <- ggplot(sim_diff[sim_diff$group=="RMSE" & sim_diff$err_inside_AOA == "inside~AOA", ],
+(diff_R2 <- ggplot(sim_diff[sim_diff$group=="R^2", ],
                           aes(x=distr, y=value,colour=CV_method)) +
     geom_boxplot(fill=NA, lwd=lw, width=w,position=position_dodge(0.6)) +
     scale_color_colorblind(name="CV method",) +
     geom_hline(aes(yintercept=0)) +
-    scale_y_continuous(limits=c(-0.2,0.2)) +
     xlab("") +
-    ylab(expression(CV - true~RMSE~inside~AOA)) +
-    theme_bw(base_size = base.size) +
-    theme(legend.position = "None",
-          axis.text.x = element_blank()))
-
-(diff_aoa_plot <- ggplot(sim_diff[sim_diff$group=="inAOA",],
-                          aes(x=distr, y=value,colour=CV_method)) +
-    geom_boxplot(fill=NA, lwd=lw, width=w,position=position_dodge(0.6)) +
-    scale_color_colorblind(name="CV method") +
-    scale_y_continuous(limits=c(0,100)) +
-    xlab("Sampling distribution") +
-    ylab("cells inside AOA [%]") +
+    ylab(expression(CV - true~R^2)) +
     theme_bw(base_size = base.size) +
     theme(legend.position = "None"))
 
-legend_right <- get_legend(diff_aoa_plot +
-                              guides(color = guide_legend(nrow = 4)) +
-                              theme(legend.position = "right"))
-
-pgr <- plot_grid(diff_rmse_plot, NULL, NULL, NULL,  
-                 diff_rmse_inAOA, legend_right, NULL, NULL,  
-                 diff_aoa_plot, NULL,NULL, NULL, 
-                 nrow=3, rel_widths = c(1, 0.3, 0.3,-0.3), axis="l", align = "v")
-ggsave("figures/comp_rmse_AOA_global.pdf", pgr, height=8, width=8)
-
-```
-
-```{r figure appendix 2}
-lw <- 0.6
-w <- 0.45
-base.size <- 15
-
-facet.labs <- list(
-  'MAE'="MAE",
-  'R^2'=expression(R^2),
-  'RMSE'="RMSE"
-)
-
-pl <- ggplot(sim_diff[!sim_diff$group %in% c("inAOA", "time", "time_mod"),],
+(diff_MAE <- ggplot(sim_diff[sim_diff$group=="MAE",],
                           aes(x=distr, y=value,colour=CV_method)) +
     geom_boxplot(fill=NA, lwd=lw, width=w,position=position_dodge(0.6)) +
     scale_color_colorblind(name="CV method") +
     geom_hline(aes(yintercept=0)) +
     xlab("Sampling distribution") +
-    ylab("CV - true error") +
+    ylab(expression(CV - true~MAE)) +
     theme_bw(base_size = base.size) +
-    theme(legend.position = "right") +
-  facet_grid(rows=vars(group), cols = vars(err_inside_AOA), scales="free_y",
-             labeller=label_parsed)
+    theme(legend.position = "None"))
 
+legend_right <- get_legend(diff_MAE +
+                              guides(color = guide_legend(nrow = 4)) +
+                              theme(legend.position = "right"))
 
-ggsave("figures/comp_all_AOA_global.pdf", pl, height=10, width=12)
+pgr <- plot_grid(diff_rmse, NULL, NULL, NULL,  
+                 diff_R2, legend_right, NULL, NULL,  
+                 diff_MAE, NULL,NULL, NULL, 
+                 nrow=3, rel_widths = c(1, 0.3, 0.3,-0.3), axis="l", align = "v")
+ggsave("figures/comp_all_global.pdf", pgr, height=8, width=8)
+#
 
 ```
 
+# sla data
 
-```{r appendix 3}
+```{r figure 4}
 cor_res <- read.csv("results/sim2_species/cor_res.csv")
 cor_diff <- data.frame(rmse_diff = cor_res$RMSE_kndm - cor_res$RMSE_surf,
                        r2_diff = cor_res$R2_kndm - cor_res$R2_surf,
@@ -468,33 +494,48 @@ cor_diff <- data.frame(rmse_diff = cor_res$RMSE_kndm - cor_res$RMSE_surf,
 
 m <- 0.5
 b.size <- 20
-(rmse <- ggplot(data=cor_diff, aes(x=ws)) +
-  geom_bin_2d(aes(y=abs(rmse_diff)), bins=30) +
-   scale_fill_viridis_b() +
-        scale_x_log10(breaks=c(10000,100000),labels = function(x) format(x, scientific = FALSE)) +
-   ylab(expression(CV - true~RMSE)) +
-    xlab("W") +
-  theme_bw(base_size=b.size) +
-  theme(aspect.ratio=1, legend.position = NaN,
-        plot.margin = unit(unit(rep(m,4), "cm"))))
-(mae <- ggplot(data=cor_diff, aes(ws)) +
-    geom_bin_2d(aes(y=abs(mae_diff)), bins=30) +
-    scale_fill_viridis_b() +
-        scale_x_log10(breaks=c(10000,100000),labels = function(x) format(x, scientific = FALSE)) +
-    ylab(expression(CV - true~MAE)) +
-    xlab("W") +
-    theme_bw(base_size=b.size) +
-    theme(aspect.ratio=1, legend.position = NaN,
-          plot.margin = unit(rep(m,4), "cm")))
-(r2 <- ggplot(data=cor_diff, aes(x=ws)) +
-    geom_bin_2d(aes(y=abs(r2_diff)), bins=30) +
-    scale_fill_viridis_b() +
-        scale_x_log10(breaks=c(10000,100000),labels = function(x) format(x, scientific = FALSE)) +
-    ylab(expression(CV - true~R^2)) +
+lm_rmse <- lm(abs(rmse_diff)~ws, cor_diff)
+r2_rmse <- round(summary(lm_rmse)$r.squared,2)
+pred_rmse <- predict(lm_rmse, cor_diff)
+lm_mae <- lm(abs(mae_diff)~ws, cor_diff)
+r2_mae <- round(summary(lm_mae)$r.squared,2)
+pred_mae <- predict(lm_mae, cor_diff)
+lm_r2 <- lm(abs(r2_diff)~ws, cor_diff)
+r2_r2 <- round(summary(lm_r2)$r.squared,2)
+pred_r2 <- predict(lm_r2, cor_diff)
+
+(rmse <- ggplot(data=cor_diff, aes(x=ws,y=abs(rmse_diff))) +
+    geom_bin_2d(bins=30) +
+    geom_line(aes(y=pred_rmse), col="black", linewidth=1) +
+    geom_text(aes(x=0,y=0.35, label=cor_diff$r2_rmse),parse = T) +
+    scale_fill_viridis_b(trans="log10") +
+    scale_x_continuous(n.breaks = 3,labels = function(x) format(x, scientific = FALSE)) +
+    ylab(expression(abs(CV - true~RMSE))) +
     xlab("W") +
     theme_bw(base_size=b.size) +
     theme(aspect.ratio=1, legend.position = NaN,
-        plot.margin = unit(unit(rep(m,4), "cm"))))
+          plot.margin = unit(unit(rep(m,4), "cm"))))
+
+mae <- ggplot(data=cor_diff, aes(x=ws,y=abs(mae_diff))) +
+    geom_bin_2d(bins=30) +
+    geom_line(aes(y=pred_mae), col="black", linewidth=1) +
+    scale_fill_viridis_b(trans="log10") +
+    scale_x_continuous(n.breaks = 3,labels = function(x) format(x, scientific = FALSE)) +
+    ylab(expression(abs(CV - true~MAE))) +
+    xlab("W") +
+    theme_bw(base_size=b.size) +
+    theme(aspect.ratio=1, legend.position = NaN,
+          plot.margin = unit(rep(m,4), "cm"))
+r2 <- ggplot(data=cor_diff, aes(x=ws,y=abs(r2_diff))) +
+    geom_bin_2d(bins=30) +
+    geom_line(aes(y=pred_r2), col="black", linewidth=1) +
+    scale_fill_viridis_b(trans="log10") +
+    scale_x_continuous(n.breaks = 3,labels = function(x) format(x, scientific = FALSE)) +
+    ylab(expression(abs(CV - true~R^2))) +
+    xlab("W") +
+    theme_bw(base_size=b.size) +
+    theme(aspect.ratio=1, legend.position = NaN,
+        plot.margin = unit(unit(rep(m,4), "cm")))
 
 legend_bottom <- get_legend(rmse +
                               guides(color = guide_legend(nrow = 1)) +
@@ -502,12 +543,12 @@ legend_bottom <- get_legend(rmse +
                                     legend.key.width  = unit(1.5, "cm"),
                                     legend.key.height  = unit(0.5, "cm"),
                                     plot.margin = unit(c(0, 0, 0, 0), "cm")))
-top_row <- plot_grid(rmse, r2, mae, nrow=1)
+top_row <- plot_grid(rmse, r2, mae, nrow=1, align="hv")
 c <- plot_grid(top_row, NULL, legend_bottom, NULL, nrow=4,
                rel_heights = c(1,-0.35,1,-0.4), rel_widths = c(1,1,5,1))
-c
-ggsave("figures/WS_err.pdf",c, height=5, width=12)
 
+ggsave("figures/WS_err_linear.pdf",c, height=5, width=12)
+#
 ```
 
 ```{r appendix 4}
@@ -530,5 +571,11 @@ tb <- ggplot(time_stats, aes(y=CV_method, fill=group)) +
     facet_wrap(~distr, nrow=1)
 
 ggsave("figures/times.pdf", tb, height=4, width=12)
+
+```
+
+
+```{r figure example nematodes}
+
 
 ```

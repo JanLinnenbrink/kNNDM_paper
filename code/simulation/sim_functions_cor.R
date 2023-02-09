@@ -10,10 +10,9 @@ library("virtualspecies")
 library("parallel")
 library("doParallel")
 library("pbapply")
-setwd("C:/0_Msc_Loek/M7_Fernerkundung/NNDMpaper-main/")
-
-source("./code/sim_utils.R")
-source("./code/knndm_WS.R")
+setwd("C:/git/kNNDM_paper/")
+source("./code/simulation/sim_utils.R")
+source("./code/simulation/knndm_WS.R")
 
 # No need for proj4 warnings
 options("rgdal_show_exportToProj4_warnings"="none")
