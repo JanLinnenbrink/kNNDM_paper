@@ -5,26 +5,13 @@ date: "2023-01-29"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
-setwd("C:/git/kNNDM_paper/")
+```{r calculate difference between CV and true error}
 knitr::opts_chunk$set(echo = TRUE)
-library("rnaturalearth")
-library(ggplot2)
-library(cowplot)
-library(gridExtra)
-library(ggthemes)
-library(dplyr)
-library(tidyr)
-library(forcats)
-library(sf)
-library(CAST)
-library(terra)
+library("dplyr")
+library("tidyr")
+library("forcats")
 
-library("cowplot")
-source("code/simulation/sim_utils.R")
-source("code/simulation/sim_functions.R")
-
-sim_res <- read.csv("results/simulation/sim_res.csv")
+sim_res <- read.csv("results/sim_res.csv")
 
 sim_diff <- data.frame(rmse_rand = sim_res$RMSE_rand - sim_res$RMSE_surf,
                        rmse_spatial = sim_res$RMSE_spatial - sim_res$RMSE_surf,
@@ -64,11 +51,14 @@ sim_diff <- data.frame(rmse_rand = sim_res$RMSE_rand - sim_res$RMSE_surf,
 ### different clustering
 
 ```{r figure 1}
+library("ggplot2")
+library("sf")
+library("CAST")
+library("cowplot")
+source("code/figures_utils.R")
 
-
-AOI <- st_read(dsn="./data/species_vdata.gpkg", layer="sampling_polygon")
+AOI <- st_read(dsn="data/simulation/species_vdata.gpkg", layer="sampling_polygon")
 AOI_part <- st_buffer(AOI, -200000)
-
 
 
 set.seed(100)
@@ -161,14 +151,20 @@ top_row <- plot_grid(pts_reg_pl, pts_rand_pl, pts_cl_pl, nrow=1)
 bottom_row <- plot_grid(reg_dist, rand_dist,  clust_dist, nrow=1)
 comb_pl <- plot_grid(NULL, top_row, NULL, bottom_row, NULL, legend_bottom, NULL,  
                      nrow=7, rel_heights = c(-0.22,1, -0.42,1,-0.7,1,-0.45))
-ggsave("figures/example.png", comb_pl, height = 12, width=20, units="cm")
+ggsave("figures/example_ecdfs.png", comb_pl, height = 12, width=20, units="cm")
 #
 ```
 
 ### method knndm
 ```{r figure 2}
-wgrid <- st_read(dsn="data/species_vdata.gpkg", layer="landscape_grid")
-AOI <- st_read(dsn="./data/species_vdata.gpkg", layer="sampling_polygon") |> 
+library("ggplot2")
+library("sf")
+library("CAST")
+library("cowplot")
+source("code/figures_utils.R")
+
+wgrid <- st_read(dsn="data/simulation/species_vdata.gpkg", layer="landscape_grid")
+AOI <- st_read(dsn="data/simulation/species_vdata.gpkg", layer="sampling_polygon") |> 
   st_transform(st_crs(wgrid))
 set.seed(10)
 tpoints <-  sim2_samples(100, "sclust", AOI)
@@ -179,12 +175,14 @@ AOI <- st_transform(AOI, st_crs(ppoints))
 
 k <- 2
 maxp <- 0.8
+k_out <- k_plot(k, maxp, tpoints, ppoints)
 
+pts_cl <- st_sf(do.call("cbind.data.frame",k_out[[1]]), geom=st_geometry(tpoints))
+W <- k_out[[2]]$W
 
-
-pts_cl <- st_sf(do.call("cbind.data.frame",clustgroups), geom=st_geometry(tpoints))
-W <- clustgrid$W
-
+Gjstar_i <- k_out[[3]]
+Gij <- k_out[[4]]
+Gj <- k_out[[5]]
 
 df <- lapply(Gjstar_i, function(x) list(x,Gij,Gj))
 df <- lapply(df, function(x) {names(x) <- c("Gjstar","Gij","Gj");return(x)})
@@ -199,14 +197,14 @@ dist_plts <- mapply(function(x,y){
           legend.position = NaN,
           title=element_text(size=9))
 }, x=df, y=W, SIMPLIFY = FALSE)
-dst_pl <- grid.arrange(grobs = dist_plts, nrow = 1)
+dst_pl <- plot_grid(plotlist = dist_plts, nrow = 1)
 
 pts_list <- apply(st_drop_geometry(pts_cl), 2, function(x) x, simplify = FALSE)
 pts_list_geo <- lapply(pts_list, function(x) st_sf(x, geom=pts_cl$geom))
 
 pt.size <- 0.8
 
-title_p <- clustgrid$nk
+title_p <- k_out[[6]]
 
 point_pl <- mapply(function(x,y) {
   ggplot() +
@@ -222,7 +220,7 @@ point_pl <- mapply(function(x,y) {
           title = element_text(size=9))
 }, x=pts_list_geo,y=title_p, SIMPLIFY = FALSE)
 
-pts_pl <- grid.arrange(grobs= point_pl, nrow=1)
+pts_pl <- plot_grid(plotlist = point_pl, nrow=1)
 
 bottom_row <- plot_grid(dst_pl)
 top_row <- plot_grid(pts_pl)
@@ -238,12 +236,14 @@ ggsave("figures/method_knndm.pdf",c, height=5, width=12)
 ## Results
 
 ```{r figure 3}
+library("ggplot2")
+library("ggthemes")
+library("cowplot")
 lw <- 0.6
 w <- 0.45
-#expression(paste(RMSE [CV] - RMSE [True], "for prediction area"))
-
 base.size <- 15
-(diff_rmse <- ggplot(sim_diff[sim_diff$group=="RMSE",],
+
+diff_rmse <- ggplot(sim_diff[sim_diff$group=="RMSE",],
                           aes(x=distr, y=value,colour=CV_method)) +
     geom_boxplot(fill=NA, lwd=lw, width=w,position=position_dodge(0.6)) +
     scale_color_colorblind(name="CV method") +
@@ -251,9 +251,9 @@ base.size <- 15
     xlab("") +
     ylab(expression(CV - true~RMSE)) +
     theme_bw(base_size = base.size) +
-    theme(legend.position = "None"))
+    theme(legend.position = "None")
 
-(diff_R2 <- ggplot(sim_diff[sim_diff$group=="R^2", ],
+diff_R2 <- ggplot(sim_diff[sim_diff$group=="R^2", ],
                           aes(x=distr, y=value,colour=CV_method)) +
     geom_boxplot(fill=NA, lwd=lw, width=w,position=position_dodge(0.6)) +
     scale_color_colorblind(name="CV method",) +
@@ -261,9 +261,9 @@ base.size <- 15
     xlab("") +
     ylab(expression(CV - true~R^2)) +
     theme_bw(base_size = base.size) +
-    theme(legend.position = "None"))
+    theme(legend.position = "None")
 
-(diff_MAE <- ggplot(sim_diff[sim_diff$group=="MAE",],
+diff_MAE <- ggplot(sim_diff[sim_diff$group=="MAE",],
                           aes(x=distr, y=value,colour=CV_method)) +
     geom_boxplot(fill=NA, lwd=lw, width=w,position=position_dodge(0.6)) +
     scale_color_colorblind(name="CV method") +
@@ -271,7 +271,7 @@ base.size <- 15
     xlab("Sampling distribution") +
     ylab(expression(CV - true~MAE)) +
     theme_bw(base_size = base.size) +
-    theme(legend.position = "None"))
+    theme(legend.position = "None")
 
 legend_right <- get_legend(diff_MAE +
                               guides(color = guide_legend(nrow = 4)) +
@@ -281,12 +281,11 @@ pgr <- plot_grid(diff_rmse, NULL, NULL, NULL,
                  diff_R2, legend_right, NULL, NULL,  
                  diff_MAE, NULL,NULL, NULL, 
                  nrow=3, rel_widths = c(1, 0.3, 0.3,-0.3), axis="l", align = "v")
-ggsave("figures/comp_all_global.pdf", pgr, height=8, width=8)
+ggsave("figures/sim_plot.pdf", pgr, height=8, width=8)
 #
 
 ```
 
-# sla data
 
 ```{r figure 4}
 cor_res <- read.csv("results/sim2_species/cor_res.csv")

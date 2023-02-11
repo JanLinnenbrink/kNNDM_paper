@@ -1,5 +1,5 @@
 #-----------------------------------------------------------#
-#             Simulation analysis 2: virtual species        #
+#             Simulation analysis: virtual species          #
 #-----------------------------------------------------------#
 #.libPaths("/home/j/jlinnenb/r_packages/")
 library("parallel")
@@ -8,7 +8,7 @@ library("pbapply")
 setwd("C:/git/kNNDM_paper/")
 
 # Load utils, functions, and define number of iterations
-source("code/simulation/sim_functions_cor.R")
+source("code/simulation/sim_functions_W.R")
 nsim <- 100
 pboptions(type = "timer")
 
@@ -30,4 +30,4 @@ sims <- pbreplicate(nsim, sim_species(wgrid, wclim, spoly), simplify=FALSE)
 # We're done
 stopCluster(cl)
 rm("cl")
-write_csv(do.call(rbind, sims), "results/simulation/cor_res.csv")
+write_csv(do.call(rbind, sims), "results/simulation/W_res.csv")

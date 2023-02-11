@@ -12,7 +12,7 @@ library("doParallel")
 library("pbapply")
 setwd("C:/git/kNNDM_paper/")
 source("./code/simulation/sim_utils.R")
-source("./code/simulation/knndm_WS.R")
+source("./code/simulation/knndm_W.R")
 
 # No need for proj4 warnings
 options("rgdal_show_exportToProj4_warnings"="none")

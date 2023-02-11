@@ -1,5 +1,5 @@
 #-----------------------------------------------------------#
-#             Simulation analysis 2: virtual species        #
+#             Simulation analysis: virtual species          #
 #-----------------------------------------------------------#
 #.libPaths("/home/j/jlinnenb/r_packages/")
 library("parallel")
@@ -30,4 +30,4 @@ sims <- pbreplicate(nsim, sim_species(wgrid, wclim, spoly), simplify=FALSE)
 # We're done
 stopCluster(cl)
 rm("cl")
-write_csv(do.call(rbind, sims), "results/simulation/sim_res.csv")
+write_csv(do.call(rbind, sims), "results/sim_res.csv")

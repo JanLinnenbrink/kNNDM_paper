@@ -82,6 +82,16 @@ plot.knndm.integral <- function(x, ...){
 #' @param tpoints sf or sfc point object. training points.
 #' @param ppoints sf or sfc point object. prediction points.
 k_plot <- function(k, maxp, tpoints, ppoints) {
+  
+  distclust <- function(tr_coords, folds){
+    alldist <- rep(NA, length(folds))
+    for(f in unique(folds)){
+      alldist[f == folds] <- c(FNN::knnx.dist(query = tr_coords[f == folds,,drop=FALSE],
+                                              data = tr_coords[f != folds,,drop=FALSE], k = 1))
+    }
+    alldist
+  }
+  
   # Gj: NN distance function for a cluster per point, i.e. LOO CV
   tcoords <- sf::st_coordinates(tpoints)[,1:2]
   Gj <- c(FNN::knn.dist(tcoords, k = 1))
@@ -147,6 +157,9 @@ k_plot <- function(k, maxp, tpoints, ppoints) {
       clustgroups[[paste0("nk", nk)]] <- clust_k
     }
   }
+  list(clustgroups,clustgrid, Gjstar_i, Gij, Gj, clustgrid$nk)
+  
+  
   
 }
 
