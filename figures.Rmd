@@ -58,6 +58,7 @@ library("sf")
 library("CAST")
 library("cowplot")
 source("code/figures_utils.R")
+source("code/simulation/sim_functions.R")
 
 AOI <- st_read(dsn="data/simulation/species_vdata.gpkg", layer="sampling_polygon")
 AOI_part <- st_buffer(AOI, -200000)
