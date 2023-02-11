@@ -151,7 +151,7 @@ top_row <- plot_grid(pts_reg_pl, pts_rand_pl, pts_cl_pl, nrow=1)
 bottom_row <- plot_grid(reg_dist, rand_dist,  clust_dist, nrow=1)
 comb_pl <- plot_grid(NULL, top_row, NULL, bottom_row, NULL, legend_bottom, NULL,  
                      nrow=7, rel_heights = c(-0.22,1, -0.42,1,-0.7,1,-0.45))
-ggsave("figures/example_ecdfs.png", comb_pl, height = 12, width=20, units="cm")
+ggsave("figures/1_example_ecdfs.png", comb_pl, height = 12, width=20, units="cm")
 #
 ```
 
@@ -228,7 +228,7 @@ legend_bottom <- get_legend(dist_plts[[1]] +
                               guides(color = guide_legend(nrow = 1)) +
                               theme(legend.position = "bottom"))
 c <- plot_grid(NULL,top_row, NULL, bottom_row, NULL, legend_bottom, nrow=6,rel_heights = c(-0.25,1,-0.35,1,-0.2,0.2))
-ggsave("figures/method_knndm.pdf",c, height=5, width=12)
+ggsave("figures/2_method_knndm.pdf",c, height=5, width=12)
 #
 ```
 
@@ -281,7 +281,7 @@ pgr <- plot_grid(diff_rmse, NULL, NULL, NULL,
                  diff_R2, legend_right, NULL, NULL,  
                  diff_MAE, NULL,NULL, NULL, 
                  nrow=3, rel_widths = c(1, 0.3, 0.3,-0.3), axis="l", align = "v")
-ggsave("figures/sim_plot.pdf", pgr, height=8, width=8)
+ggsave("figures/3_results_sim.pdf", pgr, height=8, width=8)
 #
 
 ```
@@ -351,35 +351,6 @@ top_row <- plot_grid(rmse, r2, mae, nrow=1, align="hv")
 c <- plot_grid(top_row, NULL, legend_bottom, NULL, nrow=4,
                rel_heights = c(1,-0.35,1,-0.4), rel_widths = c(1,1,5,1))
 
-ggsave("figures/WS_err_linear.pdf",c, height=5, width=12)
+ggsave("figures/4_results_W_err.pdf",c, height=5, width=12)
 #
-```
-
-```{r appendix 4}
-lw <- 0.6
-w <- 0.45
-base.size <- 16
-
-time_stats <- sim_diff |> 
-    filter(group %in% c("time", "time_mod")) |> 
-    group_by(group,distr,CV_method) |> 
-    summarise(mean_time=mean(value))
-
-tb <- ggplot(time_stats, aes(y=CV_method, fill=group)) +
-    geom_col(aes(x=mean_time),width = 0.4)+
-  xlab("time [s]") +
-  ylab("CV method") +
-  scale_fill_discrete("", labels=c("function time", "modelling time")) +
-    theme_bw(base_size=15) +
-    theme(legend.position = "bottom") +
-    facet_wrap(~distr, nrow=1)
-
-ggsave("figures/times.pdf", tb, height=4, width=12)
-
-```
-
-
-```{r figure example nematodes}
-
-
 ```
