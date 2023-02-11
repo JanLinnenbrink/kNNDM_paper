@@ -47,16 +47,11 @@ sim2_samples <- function(nsamples, dsamples, sarea){
 #' Fits a RF model and evaluates it using random 10-fold CV, spatial 10-fold CV,
 #' NNDM LOO CV, kNNDM 10-fold CV and true errors.
 #' @param form String. Model formula.
-#' @param folds_rand list. Indices for rand CV
-#' training data.
-#' @param folds_kndm list. Indices for kndm CV
-#' data.
-#' @param ndmout_indexTrain list. Indices for NNDM LOO CV (outcome range) training
-#' data.
-#' @param ndmout_indexTest list. Indices for NNDM LOO CV (outcome range) test data.
-#' @param ndmres_indexTrain list. Indices for NNDM LOO CV (residual range) training
-#' data.
-#' @param ndmres_indexTest list. Indices for NNDM LOO CV (residual range) test data.
+#' @param spatial_index list. Indices for spatial CV.
+#' @param kndm_indexTrain list. Indices for kNNDM 10-fold CV training data.
+#' @param kndm_indexTest list. Indices for kNNDM 10-fold CV test data.
+#' @param nndm_indexTrain list. Indices for NNDM LOO CV test data.
+#' @param nndm_indexTest list. Indices for NNDM LOO CV training data.
 #' @param prand Data frame. Parameter rand of the model.
 #' @param traindf Data frame. Training data to fit the model.
 #' @param surfdf Data frame. Surface data.
@@ -67,7 +62,7 @@ fitval_rf_species <- function(form,
                               nndm_indexTrain,
                               nndm_indexTest,
                               prand, traindf,
-                              surfdf,train_points) {
+                              surfdf) {
 
 
   # Validate with random CV and compute metrics
@@ -140,7 +135,7 @@ fitval_rf_species <- function(form,
 #' and fits a RF and evaluates it using spatial 10-fold CV, random 10-fold CV,
 #' kNNDM 10-fold CV and NNDM LOO CV; as well as the true error.
 #' @param rrand sf or sfc point object. Prediction rand.
-#' @param rstack terra SpatRaster object. Contains the landscape data and the
+#' @param rstack SpatRaster object. Contains the landscape data and the
 #' simulated outcome.
 #' @param sampling_area sf or sfc polygon object. Sampling area.
 #' @param sample_dist String or vector or string. Distribution of the sampling
@@ -193,7 +188,7 @@ sim_species <- function(rrand, rstack, sampling_area,
                              folds_ndm$indx_train,
                              folds_ndm$indx_test,
                              prand, train_data,
-                             rand_data,train_points)
+                             rand_data)
 
     # Store results of the iteration
     res_it <- cbind(data.frame(dsample=dist_it, stringsAsFactors = FALSE), mod)

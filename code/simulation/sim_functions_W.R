@@ -42,27 +42,18 @@ sim2_samples <- function(nsamples, dsamples, sarea){
 }
 
 
-#' Fits a RF model and evaluates it using several methods (species simulation).
+#' Fits a RF model and evaluates it using different kNNDM configurations and sample point distributions.
 #' @details
-#' Fits a RF model and evaluates it using LOO CV, bLOO CV, NNDM LOO CV and true errors.
+#' Fits a RF model and evaluates it using kNNDM 10-fold CV in different configurations and true errors.
 #' @param form String. Model formula.
-#' @param folds_grid list. Indices for grid CV
-#' training data.
-#' @param folds_kndm list. Indices for kndm CV
-#' data.
-#' @param ndmout_indexTrain list. Indices for NNDM LOO CV (outcome range) training
-#' data.
-#' @param ndmout_indexTest list. Indices for NNDM LOO CV (outcome range) test data.
-#' @param ndmres_indexTrain list. Indices for NNDM LOO CV (residual range) training
-#' data.
-#' @param ndmres_indexTest list. Indices for NNDM LOO CV (residual range) test data.
+#' @param folds_kndm list. Indices for kndm CV.
 #' @param pgrid Data frame. Parameter grid of the model.
 #' @param traindf Data frame. Training data to fit the model.
 #' @param surfdf Data frame. Surface data.
 fitval_rf_species <- function(form,
                               folds_kndm,
                               pgrid, traindf,
-                              surfdf,train_points) {
+                              surfdf) {
 
   # Validate with random CV and compute metrics
   r_cntrl <- trainControl(method="CV", savePredictions=TRUE)
@@ -111,11 +102,10 @@ fitval_rf_species <- function(form,
 #' Simulation function to generate many possible configurations of W and CV error.
 #' @details
 #' The function takes a virtual species simulated landscape for the Iberian
-#' peninsula using bioclim data, simulates sampling points, computes outcome
-#' and residual autocorrelation range, and fits a RF and evaluates it using
-#' kNNDM CV, as well as the true error.
+#' peninsula using bioclim data, simulates sampling points and fits a RF and 
+#' evaluates it using kNNDM CV, as well as the true error.
 #' @param rgrid sf or sfc point object. Prediction grid.
-#' @param rstack spatRast terra object. Contains the landscape data and the
+#' @param rstack spatRast object. Contains the landscape data and the
 #' simulated outcome.
 #' @param sampling_area sf or sfc polygon object. Sampling area.
 #' @param sample_dist String or vector or string. Distribution of the sampling
@@ -153,7 +143,7 @@ sim_species <- function(rgrid, rstack, sampling_area,
     mod <- fitval_rf_species(form,
                              folds_kndm$clusters,
                              pgrid, train_data,
-                             grid_data,train_points)
+                             grid_data)
     mod_all <- cbind(mod, data.frame(WS=folds_kndm$stat))
 
     # Store results of the iteration
