@@ -5,6 +5,8 @@ date: "2023-01-29"
 output: html_document
 ---
 
+# Preparation
+
 ```{r calculate difference between CV and true error}
 knitr::opts_chunk$set(echo = TRUE)
 library("dplyr")
@@ -46,9 +48,9 @@ sim_diff <- data.frame(rmse_rand = sim_res$RMSE_rand - sim_res$RMSE_surf,
 
 ```
 
-## Methods
+# Methods
 
-### different clustering
+## example of different sample configurations and the corresponding NND ECDFs
 
 ```{r figure 1}
 library("ggplot2")
@@ -155,7 +157,8 @@ ggsave("figures/1_example_ecdfs.png", comb_pl, height = 12, width=20, units="cm"
 #
 ```
 
-### method knndm
+## kNNDM workflow
+
 ```{r figure 2}
 library("ggplot2")
 library("sf")
@@ -233,7 +236,9 @@ ggsave("figures/2_method_knndm.pdf",c, height=5, width=12)
 ```
 
 
-## Results
+# Simulation results
+
+## Results of simulations
 
 ```{r figure 3}
 library("ggplot2")
@@ -286,6 +291,8 @@ ggsave("figures/3_results_sim.pdf", pgr, height=8, width=8)
 
 ```
 
+
+## association between the absolute value difference between the CV and true map accuracy statistics and W statistic
 
 ```{r figure 4}
 cor_res <- read.csv("results/sim2_species/cor_res.csv")
@@ -354,3 +361,13 @@ c <- plot_grid(top_row, NULL, legend_bottom, NULL, nrow=4,
 ggsave("figures/4_results_W_err.pdf",c, height=5, width=12)
 #
 ```
+
+# Case Study
+
+```{r figure 5}
+
+```
+
+
+
+

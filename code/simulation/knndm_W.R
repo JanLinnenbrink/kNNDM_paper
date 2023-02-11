@@ -1,29 +1,9 @@
 # Function that returns all different qs, not only the selected one.
 # Used to correlate WS.dist with difference in CV - true error.
 
-knndmWS <- function(tpoints, modeldomain = NULL, ppoints = NULL,
+knndmW <- function(tpoints, modeldomain = NULL, ppoints = NULL,
                   k = 10, maxp = NULL, linkf = "ward.D2",
                   samplesize = 1000, sampling = "regular"){
-
-  # Prior checks
-  if (is.null(ppoints) & !is.null(modeldomain)) {
-
-    message(paste0(samplesize, " prediction points are sampled from the modeldomain"))
-    ppoints <- sampleFromArea(modeldomain, samplesize, type = "geo", variables = NULL, sampling)
-  }
-  if (any(class(tpoints) %in% "sfc")) {
-    tpoints <- sf::st_sf(geom = tpoints)
-  }
-  if (any(class(ppoints) %in% "sfc")) {
-    ppoints <- sf::st_sf(geom = ppoints)
-  }
-  if(sf::st_crs(tpoints) != sf::st_crs(ppoints)){
-    tpoints <- sf::st_transform(tpoints, sf::st_crs(ppoints))
-    message("tpoints and ppoints must have the same CRS. tpoints have been transformed.")
-  }
-  if (is.null(maxp)) {
-    maxp <- 1/k*2
-  }
 
   # Gj: NND function for a cluster per point, i.e. LOO CV
   clust <- 1:nrow(tpoints)

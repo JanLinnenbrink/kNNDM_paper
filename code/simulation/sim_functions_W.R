@@ -10,9 +10,8 @@ library("virtualspecies")
 library("parallel")
 library("doParallel")
 library("pbapply")
-setwd("C:/git/kNNDM_paper/")
-source("./code/simulation/sim_utils.R")
-source("./code/simulation/knndm_W.R")
+source("code/simulation/sim_utils.R")
+source("code/simulation/knndm_W.R")
 
 # No need for proj4 warnings
 options("rgdal_show_exportToProj4_warnings"="none")
@@ -23,19 +22,12 @@ options("rgdal_show_exportToProj4_warnings"="none")
 #' Simulates a series of sampling points for the simulation.
 #' Two more extreme sampling strategies to increase the range of different WS.dist.
 #' @param nsamples Integer. Number of samples to simulate.
-#' @param dsamples Character. Spatial distribution of the samples. 5 are
-#' possible: sregular, wregular, random, wclust, sclust.
+#' @param dsamples Character. Spatial distribution of the samples. 4 are
+#' possible: "wclust","sclust","vclust","eclust".
 #' @param sarea sf/sfc polygon where samples will be simulated.
 sim2_samples <- function(nsamples, dsamples, sarea){
 
-
-  if(dsamples=="sregular"){
-    simpoints <- jitterreg_sample(sarea, nsamples, 40000)
-  }else if(dsamples=="wregular"){
-    simpoints <- jitterreg_sample(sarea, nsamples, 80000)
-  }else if(dsamples=="random"){
-    simpoints <- st_sample(sarea, nsamples)
-  }else if(dsamples=="wclust"){
+  if(dsamples=="wclust"){
     simpoints <- clustered_sample(sarea, nsamples, 25, 80000)
   }else if(dsamples=="sclust"){
     simpoints <- clustered_sample(sarea, nsamples, 10, 80000)
@@ -116,18 +108,18 @@ fitval_rf_species <- function(form,
 }
 
 
-#' Simulation function 2: virtual species.
+#' Simulation function to generate many possible configurations of W and CV error.
 #' @details
 #' The function takes a virtual species simulated landscape for the Iberian
 #' peninsula using bioclim data, simulates sampling points, computes outcome
-#' and residual autocorrelation range, and fits a RF and evaluates it using LOO,
-#' bLOO, and NNDM LOO CV; as well as the true error.
+#' and residual autocorrelation range, and fits a RF and evaluates it using
+#' kNNDM CV, as well as the true error.
 #' @param rgrid sf or sfc point object. Prediction grid.
 #' @param rstack spatRast terra object. Contains the landscape data and the
 #' simulated outcome.
 #' @param sampling_area sf or sfc polygon object. Sampling area.
 #' @param sample_dist String or vector or string. Distribution of the sampling
-#' points. 5 are possible: "sregular", "wregular", "random", "wclust","sclust".
+#' points. 4 are possible: "wclust","sclust","vclust","eclust".
 sim_species <- function(rgrid, rstack, sampling_area,
                         sample_dist=c("wclust","sclust","vclust","eclust")){
 
@@ -143,7 +135,6 @@ sim_species <- function(rgrid, rstack, sampling_area,
   # Start sampling loop
   for(dist_it in sample_dist){
     i=i+1
-    print(i)
 
     # Simulate sampling points according to parameters and constraints
     train_points <- sim2_samples(100, dist_it, sampling_area)
@@ -156,7 +147,7 @@ sim_species <- function(rgrid, rstack, sampling_area,
     train_points$outcome <- train_data$outcome
 
     # kndm
-    folds_kndm <- knndmWS(train_points, ppoints = ppoints, k=10, maxp=0.5)
+    folds_kndm <- knndmW(train_points, ppoints = ppoints, k=10, maxp=0.5)
 
     #### Model fitting and validation
     mod <- fitval_rf_species(form,

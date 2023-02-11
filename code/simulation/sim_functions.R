@@ -10,9 +10,7 @@ library("virtualspecies")
 library("parallel")
 library("doParallel")
 library("pbapply")
-
-setwd("C:/git/kNNDM_paper/")
-source("./code/simulation/sim_utils.R")
+source("code/simulation/sim_utils.R")
 
 # No need for proj4 warnings
 options("rgdal_show_exportToProj4_warnings"="none")
@@ -46,7 +44,8 @@ sim2_samples <- function(nsamples, dsamples, sarea){
 
 #' Fits a RF model and evaluates it using several methods (species simulation).
 #' @details
-#' Fits a RF model and evaluates it using LOO CV, bLOO CV, NNDM LOO CV and true errors.
+#' Fits a RF model and evaluates it using random 10-fold CV, spatial 10-fold CV,
+#' NNDM LOO CV, kNNDM 10-fold CV and true errors.
 #' @param form String. Model formula.
 #' @param folds_rand list. Indices for rand CV
 #' training data.
@@ -72,7 +71,6 @@ fitval_rf_species <- function(form,
 
 
   # Validate with random CV and compute metrics
-  print("random CV")
   r_cntrl <- trainControl(method="CV", savePredictions=TRUE)
   rand_mod <- train(form, data=traindf, method="rf",
                    trControl=r_cntrl, tunerand=prand, ntree=100)
@@ -83,7 +81,6 @@ fitval_rf_species <- function(form,
   names(rand_stats) <- paste0(names(rand_stats), "_rand")
 
   # Compute CV statistics in surface
-  print("surface CV")
   surfdf$preds <- predict(rand_mod, newdata=surfdf)
   surf_stats <- surfdf %>%
     summarise(RMSE = sqrt(mean((outcome-preds)^2)),
@@ -92,7 +89,6 @@ fitval_rf_species <- function(form,
   names(surf_stats) <- paste0(names(surf_stats), "_surf")
 
   # Validate with 10-fold cluster CV and compute CV statistics
-  print("spatial CV")
   spatial_cntrl <- trainControl(method="cv", index=spatial_index,
                                  savePredictions=TRUE)
   spatial_mod <- suppressWarnings( # train() can't compute R2
@@ -105,7 +101,6 @@ fitval_rf_species <- function(form,
   names(spatial_stats) <- paste0(names(spatial_stats), "_spatial")
 
   # Validate with knndm and compute CV statistics
-  print("knndm CV")
   kndm_cntrl <- trainControl(method="cv",
                                 index=kndm_indexTrain,
                                 indexOut=kndm_indexTest,
@@ -120,7 +115,6 @@ fitval_rf_species <- function(form,
   names(kndm_stats) <- paste0(names(kndm_stats), "_kndm")
 
   # Validate with NNDM LOO and compute CV statistics (outcome range)
-  print("NNDM CV")
   nndm_cntrl <- trainControl(method="cv",
                                 index=nndm_indexTrain,
                                 indexOut=nndm_indexTest,
