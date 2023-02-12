@@ -296,7 +296,9 @@ ggsave("figures/3_results_sim.pdf", pgr, height=8, width=8)
 ## association between the absolute value difference between the CV and true map accuracy statistics and W statistic
 
 ```{r figure 4}
-cor_res <- read.csv("results/sim_res_W.csv")
+library(ggplot2)
+library(cowplot)
+cor_res <- read.csv("results/W_res.csv")
 cor_diff <- data.frame(rmse_diff = cor_res$RMSE_kndm - cor_res$RMSE_surf,
                        r2_diff = cor_res$R2_kndm - cor_res$R2_surf,
                        mae_diff = cor_res$MAE_kndm - cor_res$MAE_surf,
