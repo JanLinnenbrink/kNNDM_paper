@@ -318,6 +318,10 @@ lm_r2 <- lm(abs(r2_diff)~ws, cor_diff)
 r2_r2 <- round(summary(lm_r2)$r.squared,2)
 pred_r2 <- predict(lm_r2, cor_diff)
 
+print(paste("Rsquared for Rsquared:", r2_r2, ";",
+            "Rsquared for MAE:", r2_mae, ";",
+            "Rsquared for RMSE:", r2_rmse))
+
 rmse <- ggplot(data=cor_diff, aes(x=ws,y=abs(rmse_diff))) +
     geom_bin_2d(bins=30) +
     geom_line(aes(y=pred_rmse), col="black", linewidth=1.2) +

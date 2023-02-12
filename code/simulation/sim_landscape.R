@@ -52,9 +52,9 @@ wgrid <- st_as_sf(rasterToPoints(wclim, spatial = TRUE)) # derive grid
 wgrid <- st_transform(wgrid, crs=st_crs(spoly))
 
 # Export elements for simulation
-st_write(spoly, dsn="data/species_vdata.gpkg", layer="sampling_polygon")
-st_write(wgrid, dsn="data/species_vdata.gpkg", layer="landscape_grid")
-writeRaster(wclim,  "data/species_stack.grd", format="raster")
-writeRaster(outcome, "data/outcome.grd")
+st_write(spoly, dsn="data/simulation/species_vdata.gpkg", layer="sampling_polygon")
+st_write(wgrid, dsn="data/simulation/species_vdata.gpkg", layer="landscape_grid")
+writeRaster(wclim,  "data/simulation/species_stack.grd", format="raster")
+writeRaster(outcome, "data/simulation/outcome.grd")
 
 

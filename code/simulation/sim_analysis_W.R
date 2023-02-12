@@ -9,7 +9,7 @@ setwd("C:/git/kNNDM_paper/")
 
 # Load utils, functions, and define number of iterations
 source("code/simulation/sim_functions_W.R")
-nsim <- 10
+nsim <- 100
 pboptions(type = "timer")
 
 

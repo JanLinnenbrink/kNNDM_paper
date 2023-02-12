@@ -1,4 +1,3 @@
-#' [EXPERIMENTAL] K-fold Nearest Neighbour Distance Matching
 #' @description
 #' This function implements the kNNDM algorithm and returns the all indices and W statistics.
 #'
