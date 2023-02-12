@@ -298,7 +298,7 @@ ggsave("figures/3_results_sim.pdf", pgr, height=8, width=8)
 ```{r figure 4}
 library(ggplot2)
 library(cowplot)
-cor_res <- read.csv("results/W_res.csv")
+cor_res <- read.csv("results/sim_res_W.csv")
 cor_diff <- data.frame(rmse_diff = cor_res$RMSE_kndm - cor_res$RMSE_surf,
                        r2_diff = cor_res$R2_kndm - cor_res$R2_surf,
                        mae_diff = cor_res$MAE_kndm - cor_res$MAE_surf,
