@@ -56,7 +56,7 @@ plot.knndm.integral <- function(x, ...){
   
   df3 = rbind(df3.1,df3.2,df3.3,df3.4)
   colnames(df3) = c("point","ecdf","block","weights")
-  df3 = as_tibble(df3) %>% arrange(block)
+  df3 = as_tibble(df3) |> arrange(block)
   
   # Plot
   ggplot2::ggplot(data=Gplot) +
@@ -198,7 +198,3 @@ plot.knndm <- function(x, ...){
                                    hat(G)[j]^"*"*"(r,L)", ", ",
                                    hat(G)[j](r))))
 }
-
-
-
-
