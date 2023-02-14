@@ -167,7 +167,8 @@ k_plot <- function(k, maxp, tpoints, ppoints) {
 #' @details
 #' see CAST (https://github.com/HannaMeyer/CAST/blob/master/R/plot.R)
 #' @param x kNNDM-object.
-plot.knndm <- function(x, ...){
+#' @param overlay are two lines overlaying?
+plot.knndm <- function(x, overlay=FALSE, ...){
   
   # Prepare data for plotting: Gij function
   Gij_df <- data.frame(r=x$Gij[order(x$Gij)])
@@ -185,16 +186,33 @@ plot.knndm <- function(x, ...){
   Gplot <- rbind(Gij_df, Gjstar_df, Gj_df)
   
   # Plot
-  ggplot2::ggplot(data=Gplot, ggplot2::aes_string(x="r", group="Function", col="Function")) +
-    ggplot2::geom_vline(xintercept=0, lwd = 0.1) +
-    ggplot2::geom_hline(yintercept=0, lwd = 0.1) +
-    ggplot2::geom_hline(yintercept=1, lwd = 0.1) +
-    ggplot2::stat_ecdf(geom = "step", lwd = 1) +
-    ggplot2::scale_colour_manual(values=c("#000000", "#E69F00", "#56B4E9"),
-                                 labels=c(expression(hat(G)[ij](r)),
-                                          expression(hat(G)[j]^"*"*"(r,L)"),
-                                          expression(hat(G)[j](r)))) +
-    ggplot2::ylab(expression(paste(hat(G)[ij](r), ", ",
-                                   hat(G)[j]^"*"*"(r,L)", ", ",
-                                   hat(G)[j](r))))
+  if (isFALSE(overlay)) {
+    ggplot2::ggplot(data=Gplot, ggplot2::aes_string(x="r", group="Function", col="Function")) +
+      ggplot2::geom_vline(xintercept=0, lwd = 0.1) +
+      ggplot2::geom_hline(yintercept=0, lwd = 0.1) +
+      ggplot2::geom_hline(yintercept=1, lwd = 0.1) +
+      ggplot2::stat_ecdf(geom = "step", lwd = 1) +
+      ggplot2::scale_colour_manual(values=c("#000000", "#E69F00", "#56B4E9"),
+                                   labels=c(expression(hat(G)[ij](r)),
+                                            expression(hat(G)[j]^"*"*"(r,L)"),
+                                            expression(hat(G)[j](r)))) +
+      ggplot2::ylab(expression(paste(hat(G)[ij](r), ", ",
+                                     hat(G)[j]^"*"*"(r,L)", ", ",
+                                     hat(G)[j](r))))
+  } else if (isTRUE(overlay)) {
+    ggplot2::ggplot(data=Gplot, ggplot2::aes_string(x="r", group="Function", col="Function", size="Function")) +
+      ggplot2::geom_vline(xintercept=0, lwd = 0.1) +
+      ggplot2::geom_hline(yintercept=0, lwd = 0.1) +
+      ggplot2::geom_hline(yintercept=1, lwd = 0.1) +
+      ggplot2::stat_ecdf(geom = "step") +
+      ggplot2::scale_size_manual(values = c(1,1,0.5)) +
+      ggplot2::scale_colour_manual(values=c("#000000", "#E69F00", "#56B4E9"),
+                                   labels=c(expression(hat(G)[ij](r)),
+                                            expression(hat(G)[j]^"*"*"(r,L)"),
+                                            expression(hat(G)[j](r)))) +
+      ggplot2::ylab(expression(paste(hat(G)[ij](r), ", ",
+                                     hat(G)[j]^"*"*"(r,L)", ", ",
+                                     hat(G)[j](r))))
+  }
+  
 }

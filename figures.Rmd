@@ -435,12 +435,24 @@ library("cowplot")
 library("rnaturalearth")
 library("dplyr")
 library("CAST")
+library("tidyterra")
+library("terra")
+library("sf")
 source("code/figures_utils.R")
 
+sla <- st_read("data/case_study/sla.gpkg")
 sla_kndm <- readRDS("results/sla_knndm.RDS")
-rand_dist <- readRDS("rand_dist.RDS")
+sla_rand <- readRDS("results/folds_rand.RDS")
+rand_dist <- readRDS("results/rand_dist.RDS")
 err_knndm <- readRDS("results/err_knndm.RDS")
 err_rand <- readRDS("results/err_rand.RDS")
+
+sla_map <- rast("C:/git/SLA_1km_v1.tif") |> terra::aggregate(10)
+sla_map[sla_map>0] <- 1
+sla_map[sla_map <= 0] <- 0
+
+cls <- data.frame(id=0:1, value=c("masked", "not_masked"))
+levels(sla_map) <- cls
 
 lab_knndm <- bquote(
        atop(textstyle(RMSE == .(round(err_knndm[[1]],2))),
@@ -459,36 +471,34 @@ dist_knndm <- plot.knndm(sla_kndm) +
   theme(legend.position = NaN, aspect.ratio = 1)
 
 
-dist_rand <- plot.knndm(rand_dist) +  
+dist_rand <- plot.knndm(rand_dist, overlay = TRUE) +  
     annotate(geom="text",x=11.4^6,y=0.4, label=lab_rand, colour="black",hjust = 0, size=4)+
     scale_x_continuous(limits=c(0,max(dist_knndm$data$r))) +
     theme_bw() +
   theme(legend.position = NaN, aspect.ratio = 1)
 
 
-legend_bottom <- get_legend(dist_rand +
+legend_bottom <- get_legend(dist_knndm +
                               guides(color = guide_legend(nrow = 1)) +
                               theme(legend.position = "bottom"))
 top_row <- plot_grid(dist_rand,dist_knndm)
 sla_dens <- cowplot::plot_grid(top_row, NULL, legend_bottom, NULL, nrow=4, 
                                rel_heights = c(1,-0.2,0.5,-0.1))
 
-ee <- st_crs("+proj=eqearth")
-co <- ne_countries(returnclass = "sf")
-co.ee <- st_transform(co, ee)
-
 sla_map_rand <- ggplot() +
-    geom_sf(data=st_union(co.ee)) +
+    geom_spatraster(data=sla_map, aes(alpha=after_stat(value)), show.legend = FALSE) +
+    scale_alpha_manual(values=c(0,1)) +
     geom_sf(data=sla, size=0.2, color=sla_rand) +
     theme_minimal()+
     ggtitle("random 10-fold CV") +
     theme(plot.title = element_text(face="bold", size = 14, hjust = 0.5))
 
 sla_map_knndm <- ggplot() +
-    geom_sf(data=st_union(co.ee)) +
+    geom_spatraster(data=sla_map, aes(alpha=after_stat(value)), show.legend = FALSE) +
+    scale_alpha_manual(values=c(0,1)) +
     geom_sf(data=sla, size=0.2, color=sla_kndm$clusters) +
     theme_minimal()+
-    ggtitle("kNNDM 4-fold CV") +
+    ggtitle("kNNDM 10-fold CV") +
     theme(plot.title = element_text(face="bold", size = 14, hjust = 0.5))
 
 maps <- plot_grid(sla_map_rand, sla_map_knndm, nrow=1)

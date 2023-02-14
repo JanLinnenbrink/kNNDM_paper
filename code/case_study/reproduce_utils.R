@@ -1,7 +1,7 @@
 # First two from Ludwig et al. (2023): Assessing and improving the transferability of current global spatial prediction models 
 # https://github.com/LOEK-RS/global_applicability/tree/main/sla
 
-train_model = function(modelname, training_samples, predictors, response, folds, hyperparameter){
+train_model = function(training_samples, predictors, response, folds, hyperparameter){
   
   training_samples = training_samples %>% 
     dplyr::select(all_of(c(predictors, response))) %>% 
