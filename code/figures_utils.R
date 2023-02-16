@@ -147,10 +147,8 @@ k_plot <- function(k, maxp, tpoints, ppoints) {
     tabclust2 <- tabclust2[order(tabclust2$ID),]
     clust_k <- tabclust2$clust_k
     
-    j <- j+1
-    
-    print(j)
     # Compute W statistic if not exceeding maxp
+    j <- j+1
     if(!any(table(clust_k)/length(clust_k)>maxp)){
       Gjstar_i[[j]] <- distclust(tcoords, clust_k)
       clustgrid$W[clustgrid$nk==nk] <- twosamples::wass_stat(Gjstar_i[[j]], Gij)
@@ -158,9 +156,6 @@ k_plot <- function(k, maxp, tpoints, ppoints) {
     }
   }
   list(clustgroups,clustgrid, Gjstar_i, Gij, Gj, clustgrid$nk)
-  
-  
-  
 }
 
 #' Function to plot ECDFs of Gi, Gij and Gij*

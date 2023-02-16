@@ -1,72 +1,40 @@
 ---
-title: "figures_knndmcv"
-author: "Jan Linnenbrink"
-date: "2023-01-29"
-output: html_document
+title: "kNNDM: k-fold Nearest Neighbour Distance Matching Cross-Validation for map accuracy estimation"
+author: "Jan Linnenbrink & Carles Milà"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output: pdf_document
 ---
 
-# Preparation
-
-```{r calculate difference between CV and true error}
-knitr::opts_chunk$set(echo = TRUE)
-library("dplyr")
-library("tidyr")
-library("forcats")
-
-sim_res <- read.csv("results/sim_res.csv")
-
-sim_diff <- data.frame(rmse_rand = sim_res$RMSE_rand - sim_res$RMSE_surf,
-                       rmse_spatial = sim_res$RMSE_spatial - sim_res$RMSE_surf,
-                       rmse_nndm = sim_res$RMSE_nndm - sim_res$RMSE_surf,
-                       rmse_kndm = sim_res$RMSE_kndm - sim_res$RMSE_surf,
-                       r2_rand = sim_res$R2_rand - sim_res$R2_surf,
-                       r2_spatial= sim_res$R2_spatial - sim_res$R2_surf,
-                       r2_nndm = sim_res$R2_nndm - sim_res$R2_surf,
-                       r2_kndm = sim_res$R2_kndm - sim_res$R2_surf,
-                       mae_rand = sim_res$MAE_rand - sim_res$MAE_surf,
-                       mae_spatial = sim_res$MAE_spatial - sim_res$MAE_surf,
-                       mae_kndm = sim_res$MAE_kndm - sim_res$MAE_surf,
-                       mae_nndm = sim_res$MAE_nndm - sim_res$MAE_surf,
-                       dsample = sim_res$dsample) |>
-  pivot_longer(!dsample) |>
-  mutate(distr = case_when(dsample == "sregular" ~ "Strong\nregular",
-                                     dsample == "wregular" ~ "Weak\nregular",
-                                     dsample == "random" ~ "Random",
-                                     dsample == "wclust" ~ "Weak\nclustered",
-                                     dsample == "sclust" ~ "Strong\nclustered"),
-         distr = as.factor(distr),
-         distr = fct_relevel(distr, c("Strong\nregular", "Weak\nregular", "Random",
-                                   "Weak\nclustered", "Strong\nclustered")),
-         CV_method = case_when(grepl("rand", name) ~ "random 10-fold",
-                               grepl("spatial", name) ~ "spatial 10-fold",
-                               grepl("nndm", name) ~ "NNDM LOO",
-                               grepl("kndm", name) ~ "kNNDM 10-fold"),
-         CV_method = fct_relevel(CV_method, "random 10-fold",  "spatial 10-fold","NNDM LOO","kNNDM 10-fold"),
-         group = case_when(startsWith(name, "rmse") ~ "RMSE",
-                           startsWith(name, "mae") ~ "MAE",
-                           startsWith(name, "r2") ~ "R^2"))
-
+```{r rmd options, echo=FALSE}
+knitr::opts_chunk$set(fig.align = 'center', message = FALSE, echo=FALSE, 
+                      warning = FALSE, fig.width = 8, fig.height = 3)
 ```
 
-# Methods
+This file contains the code to reproduce figures 1, 3, 5 & 6 of the paper "kNNDM: k-fold Nearest Neighbour Distance Matching Cross-Validation for map accuracy estimation" by J Linnenbrink, C Milà, M Ludwig & H Meyer.
 
-## example of different sample configurations and the corresponding NND ECDFs
 
-```{r figure 1}
+
+## Example: different clustering, NND ECDFs and W statistics
+
+This code reproduces figure 1, where different configurations of training samples and their corresponding nearest neighbour distance (NND) empirical cumulative distribution functions (ECDF) are shown. Also, the Wasserstein statistic is shown in orange.
+
+```{r figure 1, fig.width=10, fig.height=6, message=FALSE}
 library("ggplot2")
 library("sf")
 library("CAST")
 library("cowplot")
 source("code/figures_utils.R")
-source("code/simulation/sim_functions.R")
+source("code/sim_functions.R")
 
-AOI <- st_read(dsn="data/simulation/species_vdata.gpkg", layer="sampling_polygon")
+AOI <- quiet(st_read(dsn="data/species_vdata.gpkg", layer="sampling_polygon"))
 AOI_part <- st_buffer(AOI, -200000)
 
 
-set.seed(100)
+set.seed(10)
 tpoints_rand <- sim2_samples(100, "random", AOI)
+set.seed(10)
 tpoints_reg <- sim2_samples(100, "sregular", AOI)
+set.seed(10)
 tpoints_cl <-  sim2_samples(100, "sclust", AOI)
 tpoints_cl$cl <- "clustered"
 tpoints_rand$cl <- "random"
@@ -74,12 +42,15 @@ tpoints_reg$cl <- "regular"
 
 tp <- rbind(tpoints_rand, tpoints_cl)
 
+set.seed(100)
 ppoints <- st_sample(AOI, 500, type = "regular") |>
   st_transform(st_crs(tpoints_rand))
 
 set.seed(100)
 k_reg <- knndm(tpoints_reg, ppoints=ppoints)
+set.seed(100)
 k_rand <- knndm(tpoints_rand, ppoints=ppoints)
+set.seed(100)
 k_clust <- knndm(tpoints_cl, k = 2,  ppoints=ppoints, maxp=0.8)
 
 pts.size <- 1
@@ -112,7 +83,7 @@ legend_bottom <- get_legend(rand_dist+
                               guides(color = guide_legend(nrow = 1)) +
                               theme(legend.position = "bottom"))
 
-(pts_cl_pl <- ggplot() +
+pts_cl_pl <- ggplot() +
   geom_sf(data=AOI, alpha=0) +
   geom_sf(data=ppoints, size=0.2, alpha=ppts.alpha) +
   geom_sf(data=tpoints_cl,size=pts.size) +
@@ -123,7 +94,7 @@ legend_bottom <- get_legend(rand_dist+
     theme(legend.position = "None",
           strip.text.x = element_text(size = 12),
           plot.margin = unit(rep(0.2,4), "cm")) +
-  facet_wrap(~cl))
+  facet_wrap(~cl)
 
 pts_reg_pl <- ggplot() +
   geom_sf(data=AOI, alpha=0) +
@@ -154,31 +125,36 @@ top_row <- plot_grid(pts_reg_pl, pts_rand_pl, pts_cl_pl, nrow=1)
 bottom_row <- plot_grid(reg_dist, rand_dist,  clust_dist, nrow=1)
 comb_pl <- plot_grid(NULL, top_row, NULL, bottom_row, NULL, legend_bottom, NULL,  
                      nrow=7, rel_heights = c(-0.22,1, -0.42,1,-0.7,1,-0.45))
-ggsave("figures/1_example_ecdfs.png", comb_pl, height = 12, width=20, units="cm")
-#
+
+#ggsave("figures/1_example_ecdfs.png", comb_pl, height = 12, width=20, units="cm")
+comb_pl
 ```
+
 
 ## kNNDM workflow
 
-```{r figure 2}
+This code reproduces the kNNDM workflow shown in figure 3. Several numbers of clusters *q* are compared regarding their W statistic (bottom row).
+
+```{r figure 2, fig.width=12,fig.height=6, message=FALSE}
 library("ggplot2")
 library("sf")
 library("CAST")
 library("cowplot")
 source("code/figures_utils.R")
 
-wgrid <- st_read(dsn="data/simulation/species_vdata.gpkg", layer="landscape_grid")
-AOI <- st_read(dsn="data/simulation/species_vdata.gpkg", layer="sampling_polygon") |> 
+wgrid <- quiet(st_read(dsn="data/species_vdata.gpkg", layer="landscape_grid"))
+AOI <- quiet(st_read(dsn="data/species_vdata.gpkg", layer="sampling_polygon")) |> 
   st_transform(st_crs(wgrid))
 set.seed(10)
 tpoints <-  sim2_samples(100, "sclust", AOI)
+set.seed(10)
 ppoints <- st_sample(AOI, 1000, type = "regular")
 tpoints <- st_transform(tpoints, st_crs(ppoints))
 AOI <- st_transform(AOI, st_crs(ppoints))
 
-
 k <- 2
 maxp <- 0.8
+set.seed(10)
 k_out <- k_plot(k, maxp, tpoints, ppoints)
 
 pts_cl <- st_sf(do.call("cbind.data.frame",k_out[[1]]), geom=st_geometry(tpoints))
@@ -232,19 +208,58 @@ legend_bottom <- get_legend(dist_plts[[1]] +
                               guides(color = guide_legend(nrow = 1)) +
                               theme(legend.position = "bottom"))
 c <- plot_grid(NULL,top_row, NULL, bottom_row, NULL, legend_bottom, nrow=6,rel_heights = c(-0.25,1,-0.35,1,-0.2,0.2))
-ggsave("figures/2_method_knndm.pdf",c, height=5, width=12)
-#
+
+#ggsave("figures/2_method_knndm.pdf",c, height=5, width=12)
+c
 ```
 
 
-# Simulation results
+## Simulation results
 
-## Results of simulations
+The following code reproduces figure 5, and shows the differences between cross-validated and true RMSE, R^2 and MAE for different sampling distributions.
 
-```{r figure 3}
+```{r figure 3, fig.width=8, fig.height=8, message=FALSE}
 library("ggplot2")
 library("ggthemes")
 library("cowplot")
+library("dplyr")
+library("tidyr")
+library("forcats")
+
+# read and process the simulation results
+sim_res <- read.csv("results/sim_res.csv")
+
+sim_diff <- data.frame(rmse_rand = sim_res$RMSE_rand - sim_res$RMSE_surf,
+                       rmse_spatial = sim_res$RMSE_spatial - sim_res$RMSE_surf,
+                       rmse_nndm = sim_res$RMSE_nndm - sim_res$RMSE_surf,
+                       rmse_kndm = sim_res$RMSE_kndm - sim_res$RMSE_surf,
+                       r2_rand = sim_res$R2_rand - sim_res$R2_surf,
+                       r2_spatial= sim_res$R2_spatial - sim_res$R2_surf,
+                       r2_nndm = sim_res$R2_nndm - sim_res$R2_surf,
+                       r2_kndm = sim_res$R2_kndm - sim_res$R2_surf,
+                       mae_rand = sim_res$MAE_rand - sim_res$MAE_surf,
+                       mae_spatial = sim_res$MAE_spatial - sim_res$MAE_surf,
+                       mae_kndm = sim_res$MAE_kndm - sim_res$MAE_surf,
+                       mae_nndm = sim_res$MAE_nndm - sim_res$MAE_surf,
+                       dsample = sim_res$dsample) |>
+  pivot_longer(!dsample) |>
+  mutate(distr = case_when(dsample == "sregular" ~ "Strong\nregular",
+                                     dsample == "wregular" ~ "Weak\nregular",
+                                     dsample == "random" ~ "Random",
+                                     dsample == "wclust" ~ "Weak\nclustered",
+                                     dsample == "sclust" ~ "Strong\nclustered"),
+         distr = as.factor(distr),
+         distr = fct_relevel(distr, c("Strong\nregular", "Weak\nregular", "Random",
+                                   "Weak\nclustered", "Strong\nclustered")),
+         CV_method = case_when(grepl("rand", name) ~ "random 10-fold",
+                               grepl("spatial", name) ~ "spatial 10-fold",
+                               grepl("nndm", name) ~ "NNDM LOO",
+                               grepl("kndm", name) ~ "kNNDM 10-fold"),
+         CV_method = fct_relevel(CV_method, "random 10-fold",  "spatial 10-fold","NNDM LOO","kNNDM 10-fold"),
+         group = case_when(startsWith(name, "rmse") ~ "RMSE",
+                           startsWith(name, "mae") ~ "MAE",
+                           startsWith(name, "r2") ~ "R^2"))
+
 lw <- 0.6
 w <- 0.45
 base.size <- 15
@@ -287,17 +302,19 @@ pgr <- plot_grid(diff_rmse, NULL, NULL, NULL,
                  diff_R2, legend_right, NULL, NULL,  
                  diff_MAE, NULL,NULL, NULL, 
                  nrow=3, rel_widths = c(1, 0.3, 0.3,-0.3), axis="l", align = "v")
-ggsave("figures/3_results_sim.pdf", pgr, height=8, width=8)
-#
 
+#ggsave("figures/3_results_sim.pdf", pgr, height=8, width=8)
+pgr
 ```
 
 
-## association between the absolute value difference between the CV and true map accuracy statistics and W statistic
+## Association CV - True error and W statistic
 
-```{r figure 4}
-library(ggplot2)
-library(cowplot)
+The following code reproduces figure 6, which shows the association between the absolute value difference between the CV and true map accuracy statistics and W statistic.
+
+```{r figure 4, fig.width=10,fig.height=5, message=FALSE}
+library("ggplot2")
+library("cowplot")
 cor_res <- read.csv("results/sim_res_W.csv")
 cor_diff <- data.frame(rmse_diff = cor_res$RMSE_kndm - cor_res$RMSE_surf,
                        r2_diff = cor_res$R2_kndm - cor_res$R2_surf,
@@ -364,7 +381,7 @@ top_row <- plot_grid(rmse, r2, mae, nrow=1, align="hv")
 c <- plot_grid(top_row, NULL, legend_bottom, NULL, nrow=4,
                rel_heights = c(1,-0.35,1,-0.4), rel_widths = c(1,1,5,1))
 
-ggsave("figures/4_results_W_err.pdf",c, height=5, width=12)
-#
+#ggsave("figures/4_results_W_err.pdf",c, height=5, width=12)
+c
 ```
 

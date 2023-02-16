@@ -10,7 +10,7 @@ library("virtualspecies")
 library("parallel")
 library("doParallel")
 library("pbapply")
-source("code/simulation/sim_utils.R")
+source("code/sim_utils.R")
 
 # No need for proj4 warnings
 options("rgdal_show_exportToProj4_warnings"="none")
