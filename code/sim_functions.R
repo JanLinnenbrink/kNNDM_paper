@@ -52,7 +52,7 @@ sim2_samples <- function(nsamples, dsamples, sarea){
 #' @param kndm_indexTest list. Indices for kNNDM 10-fold CV test data.
 #' @param nndm_indexTrain list. Indices for NNDM LOO CV test data.
 #' @param nndm_indexTest list. Indices for NNDM LOO CV training data.
-#' @param prand Data frame. Parameter rand of the model.
+#' @param pgrid Data frame. Parameter rand of the model.
 #' @param traindf Data frame. Training data to fit the model.
 #' @param surfdf Data frame. Surface data.
 fitval_rf_species <- function(form,
@@ -61,14 +61,14 @@ fitval_rf_species <- function(form,
                               kndm_indexTest,
                               nndm_indexTrain,
                               nndm_indexTest,
-                              prand, traindf,
+                              pgrid, traindf,
                               surfdf) {
 
 
   # Validate with random CV and compute metrics
   r_cntrl <- trainControl(method="CV", savePredictions=TRUE)
   rand_mod <- train(form, data=traindf, method="rf",
-                   trControl=r_cntrl, tunerand=prand, ntree=100)
+                   trControl=r_cntrl, tuneGrid=pgrid, ntree=100)
   err_stats_rand <- global_validation(rand_mod)
   rand_stats <- data.frame(RMSE = err_stats_rand[[1]],
               MAE = err_stats_rand[[3]],
@@ -88,7 +88,7 @@ fitval_rf_species <- function(form,
                                  savePredictions=TRUE)
   spatial_mod <- suppressWarnings( # train() can't compute R2
     train(form, data=traindf, method="rf",
-          trControl=spatial_cntrl, tunerand=prand, ntree=100))
+          trControl=spatial_cntrl, tuneGrid=pgrid, ntree=100))
   err_stats_spatial <- global_validation(spatial_mod)
   spatial_stats <- data.frame(RMSE = err_stats_spatial[[1]],
               MAE = err_stats_spatial[[3]],
@@ -102,7 +102,7 @@ fitval_rf_species <- function(form,
                                 savePredictions=TRUE)
   kndm_mod <- suppressWarnings( # train() can't compute R2
     train(form, data=traindf, method="rf",
-          trControl=kndm_cntrl, tunerand=prand, ntree=100))
+          trControl=kndm_cntrl, tuneGrid=pgrid, ntree=100))
   err_stats_kndm <- global_validation(kndm_mod)
   kndm_stats <- data.frame(RMSE = err_stats_kndm[[1]],
               MAE = err_stats_kndm[[3]],
@@ -116,7 +116,7 @@ fitval_rf_species <- function(form,
                                 savePredictions=TRUE)
   nndm_mod <- suppressWarnings( # train() can't compute R2
     train(form, data=traindf, method="rf",
-          trControl=nndm_cntrl, tunerand=prand, ntree=100))
+          trControl=nndm_cntrl, tuneGrid=pgrid, ntree=100))
   err_stats_nndm <- global_validation(nndm_mod)
   nndm_stats <- data.frame(RMSE = err_stats_nndm[[1]],
               MAE = err_stats_nndm[[3]],
@@ -149,10 +149,11 @@ sim_species <- function(rgrid, rstack, sampling_area,
 
   # Initiate results object and fixed information for all models
   res <- data.frame()
-  rand_data <- as.data.frame(terra::extract(rstack, terra::vect(rgrid)))
+  grid_data <- as.data.frame(terra::extract(rstack, terra::vect(rgrid)))
   form <- as.formula(paste0("outcome~", paste0("bio", 1:19, collapse="+")))
-  prand <- data.frame(mtry=6)
-
+  pgrid<- data.frame(mtry=6)
+  res <- data.frame()
+  
   i <- 0
   # Start sampling loop
   for(dist_it in sample_dist){
@@ -187,8 +188,8 @@ sim_species <- function(rgrid, rstack, sampling_area,
                              folds_kndm$indx_test,
                              folds_ndm$indx_train,
                              folds_ndm$indx_test,
-                             prand, train_data,
-                             rand_data)
+                             pgrid, train_data,
+                             grid_data)
 
     # Store results of the iteration
     res_it <- cbind(data.frame(dsample=dist_it, stringsAsFactors = FALSE), mod)

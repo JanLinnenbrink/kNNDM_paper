@@ -55,6 +55,5 @@ wgrid <- st_transform(wgrid, crs=st_crs(spoly))
 st_write(spoly, dsn="data/species_vdata.gpkg", layer="sampling_polygon")
 st_write(wgrid, dsn="data/species_vdata.gpkg", layer="landscape_grid")
 writeRaster(wclim,  "data/species_stack.grd", format="raster")
-writeRaster(outcome, "data/outcome.grd")
 
 
