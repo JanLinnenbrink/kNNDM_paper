@@ -17,12 +17,12 @@
 #'
 #' @return An object of class \emph{list} consisting of a list of two elements:
 #' clusters (list of cluster IDs), and W (Wasserstein statistic).
- 
+
 
 knndmW <- function(tpoints, modeldomain = NULL, ppoints = NULL,
-                  k = 10, maxp = 0.5,
-                  clustering = "hierarchical", linkf = "ward.D2",
-                  samplesize = 1000, sampling = "regular"){
+                   k = 10, maxp = 0.5,
+                   clustering = "hierarchical", linkf = "ward.D2",
+                   samplesize = 1000, sampling = "regular"){
   
   # create sample points from modeldomain
   if(is.null(ppoints)&!is.null(modeldomain)){
@@ -77,112 +77,89 @@ knndmW <- function(tpoints, modeldomain = NULL, ppoints = NULL,
     Gij <- c(FNN::knnx.dist(query = sf::st_coordinates(ppoints)[,1:2],
                             data = tcoords, k = 1))
   }
+  if(clustering == "hierarchical"){
+    # For hierarchical clustering we need to compute the full distance matrix,
+    # but we can integrate geographical distances
+    if(!isTRUE(islonglat)){
+      distmat <- sf::st_distance(tpoints)
+    }
+    hc <- stats::hclust(d = stats::as.dist(distmat), method = linkf)
+  }
   
-  # Check if Gj > Gij (warning suppressed regarding ties)
-  testks <- suppressWarnings(stats::ks.test(Gj, Gij, alternative = "great"))
-  if(testks$p.value >= 0.05){
+  # Build grid of number of clusters to try - we sample low numbers more intensively
+  clustgrid <- data.frame(nk = as.integer(round(exp(seq(log(k), log(nrow(tpoints)-2),
+                                                        length.out = 100)))))
+  clustgrid$W <- NA
+  clustgrid <- clustgrid[!duplicated(clustgrid$nk),]
+  clustgroups <- list()
+  
+  # Compute 1st PC for ordering clusters
+  pcacoords <- stats::prcomp(tcoords, center = TRUE, scale. = FALSE, rank = 1)
+  
+  # We test each number of clusters
+  for(nk in clustgrid$nk){
     
-    clust <- sample(rep(1:k, ceiling(nrow(tpoints)/k)), size = nrow(tpoints), replace=F)
-    
-    if(isTRUE(islonglat)){
-      Gjstar <- distclust_geo(distmat, clust)
-    }else{
-      Gjstar <- distclust_proj(tcoords, clust)
-    }
-    k_final <- "random CV"
-    W_final <- twosamples::wass_stat(Gjstar, Gij)
-    message("Gij <= Gj; a random CV assignment is returned")
-    
-    # Output
-    res <- list(clusters = clust, W=W_final)
-    class(res) <- c("list")
-    res
-    
-  }else{
-    
+    # Create nk clusters
     if(clustering == "hierarchical"){
-      # For hierarchical clustering we need to compute the full distance matrix,
-      # but we can integrate geographical distances
-      if(!isTRUE(islonglat)){
-        distmat <- sf::st_distance(tpoints)
-      }
-      hc <- stats::hclust(d = stats::as.dist(distmat), method = linkf)
+      clust_nk <- stats::cutree(hc, k=nk)
+    }else if(clustering == "kmeans"){
+      clust_nk <- stats::kmeans(tcoords, nk)$cluster
     }
     
-    # Build grid of number of clusters to try - we sample low numbers more intensively
-    clustgrid <- data.frame(nk = as.integer(round(exp(seq(log(k), log(nrow(tpoints)-2),
-                                                          length.out = 100)))))
-    clustgrid$W <- NA
-    clustgrid <- clustgrid[!duplicated(clustgrid$nk),]
-    clustgroups <- list()
+    tabclust <- as.data.frame(table(clust_nk))
+    tabclust$clust_k <- NA
     
-    # Compute 1st PC for ordering clusters
-    pcacoords <- stats::prcomp(tcoords, center = TRUE, scale. = FALSE, rank = 1)
+    # compute cluster centroids and apply PC loadings to shuffle along the 1st dimension
+    centr_tpoints <- sapply(tabclust$clust_nk, function(x){
+      centrpca <- matrix(apply(tcoords[clust_nk %in% x, , drop=FALSE], 2, mean), nrow = 1)
+      colnames(centrpca) <- colnames(tcoords)
+      return(predict(pcacoords, centrpca))
+    })
+    tabclust$centrpca <- centr_tpoints
+    tabclust <- tabclust[order(tabclust$centrpca),]
     
-    # We test each number of clusters
-    for(nk in clustgrid$nk){
-      
-      # Create nk clusters
-      if(clustering == "hierarchical"){
-        clust_nk <- stats::cutree(hc, k=nk)
-      }else if(clustering == "kmeans"){
-        clust_nk <- stats::kmeans(tcoords, nk)$cluster
-      }
-      
-      tabclust <- as.data.frame(table(clust_nk))
-      tabclust$clust_k <- NA
-      
-      # compute cluster centroids and apply PC loadings to shuffle along the 1st dimension
-      centr_tpoints <- sapply(tabclust$clust_nk, function(x){
-        centrpca <- matrix(apply(tcoords[clust_nk %in% x, , drop=FALSE], 2, mean), nrow = 1)
-        colnames(centrpca) <- colnames(tcoords)
-        return(predict(pcacoords, centrpca))
-      })
-      tabclust$centrpca <- centr_tpoints
-      tabclust <- tabclust[order(tabclust$centrpca),]
-      
-      # We don't merge big clusters
-      clust_i <- 1
-      for(i in 1:nrow(tabclust)){
-        if(tabclust$Freq[i] >= nrow(tpoints)/k){
-          tabclust$clust_k[i] <- clust_i
-          clust_i <- clust_i + 1
-        }
-      }
-      rm("clust_i")
-      
-      # And we merge the remaining into k groups
-      clust_i <- setdiff(1:k, unique(tabclust$clust_k))
-      tabclust$clust_k[is.na(tabclust$clust_k)] <- rep(clust_i, ceiling(nk/length(clust_i)))[1:sum(is.na(tabclust$clust_k))]
-      tabclust2 <- data.frame(ID = 1:length(clust_nk), clust_nk = clust_nk)
-      tabclust2 <- merge(tabclust2, tabclust, by = "clust_nk")
-      tabclust2 <- tabclust2[order(tabclust2$ID),]
-      clust_k <- tabclust2$clust_k
-      
-      # Compute W statistic if not exceeding maxp
-      if(!any(table(clust_k)/length(clust_k)>maxp)){
-        
-        if(isTRUE(islonglat)){
-          Gjstar_i <- distclust_geo(distmat, clust_k)
-        }else{
-          Gjstar_i <- distclust_proj(tcoords, clust_k)
-        }
-        clustgrid$W[clustgrid$nk==nk] <- twosamples::wass_stat(Gjstar_i, Gij)
-        clustgroups[[paste0("nk", nk)]] <- clust_k
+    # We don't merge big clusters
+    clust_i <- 1
+    for(i in 1:nrow(tabclust)){
+      if(tabclust$Freq[i] >= nrow(tpoints)/k){
+        tabclust$clust_k[i] <- clust_i
+        clust_i <- clust_i + 1
       }
     }
+    rm("clust_i")
     
-    # return every split
-    W_final <- clustgrid[!is.na(clustgrid$W),"W"]
-    clust <- clustgroups[!is.na(clustgrid$W)]
+    # And we merge the remaining into k groups
+    clust_i <- setdiff(1:k, unique(tabclust$clust_k))
+    tabclust$clust_k[is.na(tabclust$clust_k)] <- rep(clust_i, ceiling(nk/length(clust_i)))[1:sum(is.na(tabclust$clust_k))]
+    tabclust2 <- data.frame(ID = 1:length(clust_nk), clust_nk = clust_nk)
+    tabclust2 <- merge(tabclust2, tabclust, by = "clust_nk")
+    tabclust2 <- tabclust2[order(tabclust2$ID),]
+    clust_k <- tabclust2$clust_k
     
+    # Compute W statistic if not exceeding maxp
+    if(!any(table(clust_k)/length(clust_k)>maxp)){
+      
+      if(isTRUE(islonglat)){
+        Gjstar_i <- distclust_geo(distmat, clust_k)
+      }else{
+        Gjstar_i <- distclust_proj(tcoords, clust_k)
+      }
+      clustgrid$W[clustgrid$nk==nk] <- twosamples::wass_stat(Gjstar_i, Gij)
+      clustgroups[[paste0("nk", nk)]] <- clust_k
+    }
+  }
+  
+  # return every split
+  W_final <- clustgrid[!is.na(clustgrid$W),"W"]
+  clust <- clustgroups[!is.na(clustgrid$W)]
+  
   # Output
   res <- list(clusters = clust, W=W_final)
   class(res) <- c("list")
   res
-  }
 }
-
+  
+    
 # Helper function: Compute out-of-fold NN distance (geographical)
 distclust_geo <- function(distm, folds){
   alldist <- rep(NA, length(folds))

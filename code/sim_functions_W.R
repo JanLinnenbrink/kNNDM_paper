@@ -10,8 +10,8 @@ library("virtualspecies")
 library("parallel")
 library("doParallel")
 library("pbapply")
-source("code/simulation/sim_utils.R")
-source("code/simulation/knndm_W.R")
+source("code/sim_utils.R")
+source("code/knndm_W.R")
 
 # No need for proj4 warnings
 options("rgdal_show_exportToProj4_warnings"="none")
@@ -42,7 +42,7 @@ sim2_samples <- function(nsamples, dsamples, sarea){
   }else if(dsamples=="eclust"){
     simpoints <- clustered_sample(sarea, nsamples, 5, 40000)
   }
-
+  
   simpoints <- st_sf(geometry=simpoints)
   simpoints
 }
@@ -60,17 +60,17 @@ fitval_rf_species <- function(form,
                               kndm_folds,
                               pgrid, traindf,
                               surfdf) {
-
+  
   # Validate with random CV and compute metrics
   r_cntrl <- trainControl(method="CV", savePredictions=TRUE)
   rand_mod <- train(form, data=traindf, method="rf",
-                   trControl=r_cntrl, tuneGrid=pgrid, ntree=100)
+                    trControl=r_cntrl, tuneGrid=pgrid, ntree=100)
   rand_stats <- rand_mod$pred %>%
     summarise(RMSE = sqrt(mean((obs-pred)^2)),
               MAE = mean(abs(obs-pred)),
               R2 = cor(obs, pred)^2)
   names(rand_stats) <- paste0(names(rand_stats), "_rand")
-
+  
   # Compute CV statistics in surface
   surfdf$preds <- predict(rand_mod, newdata=surfdf)
   surf_stats <- surfdf %>%
@@ -78,7 +78,7 @@ fitval_rf_species <- function(form,
               MAE = mean(abs(outcome-preds)),
               R2 = cor(outcome, preds)^2)
   names(surf_stats) <- paste0(names(surf_stats), "_surf")
-
+  
   # Validate with knndm
   if (class(kndm_folds)=="list") {
     kndm_stats <- lapply(kndm_folds, function(x) {
@@ -118,8 +118,8 @@ fitval_rf_species <- function(form,
   }
   
   kndm_stats_diff <- data.frame(
-  RMSE_surf = surf_stats$RMSE_surf, R2_surf = surf_stats$R2_surf, MAE_surf = surf_stats$MAE_surf,
-  RMSE_kndm = kndm_stats$RMSE_kndm, R2_kndm = kndm_stats$R2_kndm, MAE_kndm = kndm_stats$MAE_kndm)
+    RMSE_surf = surf_stats$RMSE_surf, R2_surf = surf_stats$R2_surf, MAE_surf = surf_stats$MAE_surf,
+    RMSE_kndm = kndm_stats$RMSE_kndm, R2_kndm = kndm_stats$R2_kndm, MAE_kndm = kndm_stats$MAE_kndm)
   kndm_stats_diff
 }
 
@@ -137,47 +137,46 @@ fitval_rf_species <- function(form,
 #' points. 7 are possible: "sregular", "wregular", "random", "wclust","sclust","vclust","eclust".
 sim_species <- function(rgrid, rstack, sampling_area,
                         sample_dist=c("sregular", "wregular", "random", "wclust","sclust","vclust","eclust")){
-
-
+  
   ppoints <- st_sample(sampling_area, 1000, type="regular")
-
+  
   # Initiate results object and fixed information for all models
   res <- data.frame()
   grid_data <- as.data.frame(terra::extract(rstack, terra::vect(rgrid)))
   form <- as.formula(paste0("outcome~", paste0("bio", 1:19, collapse="+")))
   pgrid <- data.frame(mtry=6)
-
+  
   i <- 0
   # Start sampling loop
   for(dist_it in sample_dist){
     i=i+1
-
+    
     # Simulate sampling points according to parameters and constraints
     train_points <- sim2_samples(100, dist_it, sampling_area)
     ppoints <- sf::st_transform(ppoints, sf::st_crs(train_points))
-
+    
     # Get training and surface data for modelling and validation
     train_data <- terra::extract(rstack, train_points)
-
+    
     # Estimate outcome range
     train_points$outcome <- train_data$outcome
-
+    
     # kndm
     folds_kndm <- knndmW(train_points, ppoints = ppoints, clustering = "kmeans", k=10, maxp=0.5)
-
+    
     #### Model fitting and validation
     mod <- fitval_rf_species(form,
                              folds_kndm$clusters,
                              pgrid, train_data,
                              grid_data)
     mod_all <- cbind(mod, data.frame(WS=folds_kndm$W))
-
+    
     # Store results of the iteration
     res_it <- cbind(data.frame(dsample=dist_it, stringsAsFactors = FALSE),
                     mod_all)
     res <- bind_rows(res, res_it)
   }
-
+  
   row.names(res) <- NULL
   res
 }

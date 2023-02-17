@@ -5,18 +5,17 @@
 library("parallel")
 library("doParallel")
 library("pbapply")
-setwd("C:/git/kNNDM_paper/")
 
 # Load utils, functions, and define number of iterations
-source("code/simulation/sim_functions_W.R")
+source("code/sim_functions_W.R")
 nsim <- 100
 pboptions(type = "timer")
 
 
 # Read data
-spoly <- st_read(dsn="data/simulation/species_vdata.gpkg", layer="sampling_polygon")
-wclim <- rast("data/simulation/species_stack.grd")
-wgrid <- st_read(dsn="data/simulation/species_vdata.gpkg", layer="landscape_grid")
+spoly <- st_read(dsn="data/species_vdata.gpkg", layer="sampling_polygon")
+wclim <- rast("data/species_stack.grd")
+wgrid <- st_read(dsn="data/species_vdata.gpkg", layer="landscape_grid")
 
 # Prepare parallelization
 print(paste0("Process started with ", 11, " cores."))
