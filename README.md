@@ -18,7 +18,7 @@ The repository is structured as follows:
 
 * [data](data/): contains the data used in the simulation.
 	* [species_stack.grd](data/species_stack.grd): the predictor variables, stacked with the true outcome.
-	* [species_vdata.gpkg](data/species_vdata.gpkg): the sampling area (layer="sampling_area") and the prediction grid (layer=landscape_grid).
+	* [species_vdata.gpkg](data/species_vdata.gpkg): the sampling area (layer="sampling_area") and the prediction grid (layer="landscape_grid").
 
 * [results](results/): contains the generated results.
 	* [sim_res.csv](results/sim_res.csv): the results from the simulation.
