@@ -134,13 +134,13 @@ fitval_rf_species <- function(form,
 #' peninsula using bioclim data, simulates sampling points
 #' and fits a RF and evaluates it using spatial 10-fold CV, random 10-fold CV,
 #' kNNDM 10-fold CV and NNDM LOO CV; as well as the true error.
-#' @param rrand sf or sfc point object. Prediction rand.
+#' @param rgrid sf or sfc point object. Prediction grid.
 #' @param rstack SpatRaster object. Contains the landscape data and the
 #' simulated outcome.
 #' @param sampling_area sf or sfc polygon object. Sampling area.
 #' @param sample_dist String or vector or string. Distribution of the sampling
 #' points. 5 are possible: "sregular", "wregular", "random", "wclust","sclust".
-sim_species <- function(rrand, rstack, sampling_area,
+sim_species <- function(rgrid, rstack, sampling_area,
                         sample_dist=c("sregular", "wregular", "random",
                                       "wclust","sclust")){
   
@@ -149,7 +149,7 @@ sim_species <- function(rrand, rstack, sampling_area,
 
   # Initiate results object and fixed information for all models
   res <- data.frame()
-  rand_data <- as.data.frame(terra::extract(rstack, terra::vect(rrand)))
+  rand_data <- as.data.frame(terra::extract(rstack, terra::vect(rgrid)))
   form <- as.formula(paste0("outcome~", paste0("bio", 1:19, collapse="+")))
   prand <- data.frame(mtry=6)
 

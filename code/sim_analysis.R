@@ -5,7 +5,6 @@
 library("parallel")
 library("doParallel")
 library("pbapply")
-setwd("C:/git/kNNDM_paper/")
 
 # Load utils, functions, and define number of iterations
 source("code/sim_functions.R")
