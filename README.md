@@ -1,4 +1,4 @@
-﻿# k-fold Nearest Neighbour Distance Matching Cross-Validation for map validation in the CAST R package
+﻿# kNNDM: k-fold Nearest Neighbour Distance Matching Cross-Validation for map accuracy estimation
 
 This repository contains the R-scripts used in the paper "k-fold Nearest Neighbour Distance Matching Cross-Validation for map validation in the CAST R package" by Jan Linnenbrink, Carles Milà, Marvin Ludwig and Hanna Meyer. The manuscript has been submitted to the journal *Methods in Ecology and Evolution*.
 
