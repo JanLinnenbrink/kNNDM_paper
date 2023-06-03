@@ -3,6 +3,8 @@ title: "Methods and results"
 author: "Jan Linnenbrink & Carles Milà"
 date: "`r format(Sys.time(), '%Y-%m-%d')`"
 output: pdf_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r rmd options, echo=FALSE}
@@ -26,9 +28,8 @@ library("cowplot")
 source("code/figures_utils.R")
 source("code/sim_functions.R")
 
-AOI <- quiet(st_read(dsn="data/species_vdata.gpkg", layer="sampling_polygon"))
+AOI <- quiet(st_read(dsn="data/species_vdata.gpkg", layer="sampling_polygon"))[1,]
 AOI_part <- st_buffer(AOI, -200000)
-
 
 set.seed(10)
 tpoints_rand <- sim2_samples(100, "random", AOI)
@@ -233,10 +234,10 @@ sim_diff <- data.frame(rmse_rand = sim_res$RMSE_rand - sim_res$RMSE_surf,
                        rmse_spatial = sim_res$RMSE_spatial - sim_res$RMSE_surf,
                        rmse_nndm = sim_res$RMSE_nndm - sim_res$RMSE_surf,
                        rmse_kndm = sim_res$RMSE_kndm - sim_res$RMSE_surf,
-                       r2_rand = sim_res$R2_rand - sim_res$R2_surf,
-                       r2_spatial= sim_res$R2_spatial - sim_res$R2_surf,
-                       r2_nndm = sim_res$R2_nndm - sim_res$R2_surf,
-                       r2_kndm = sim_res$R2_kndm - sim_res$R2_surf,
+                       r2_rand =  -1*(sim_res$R2_rand - sim_res$R2_surf),
+                       r2_spatial= -1*(sim_res$R2_spatial - sim_res$R2_surf),
+                       r2_nndm = -1*(sim_res$R2_nndm - sim_res$R2_surf),
+                       r2_kndm = -1*(sim_res$R2_kndm - sim_res$R2_surf),
                        mae_rand = sim_res$MAE_rand - sim_res$MAE_surf,
                        mae_spatial = sim_res$MAE_spatial - sim_res$MAE_surf,
                        mae_kndm = sim_res$MAE_kndm - sim_res$MAE_surf,
@@ -280,7 +281,7 @@ diff_R2 <- ggplot(sim_diff[sim_diff$group=="R^2", ],
     scale_color_colorblind(name="CV method",) +
     geom_hline(aes(yintercept=0)) +
     xlab("") +
-    ylab(expression(CV - true~R^2)) +
+    ylab(expression(-1* "*" * "(" * CV - true~R^2*")")) +
     theme_bw(base_size = base.size) +
     theme(legend.position = "None")
 
@@ -303,14 +304,68 @@ pgr <- plot_grid(diff_rmse, NULL, NULL, NULL,
                  diff_MAE, NULL,NULL, NULL, 
                  nrow=3, rel_widths = c(1, 0.3, 0.3,-0.3), axis="l", align = "v")
 
-#ggsave("figures/3_results_sim.pdf", pgr, height=8, width=8)
+ggsave("figures/3_results_sim.pdf", pgr, height=8, width=8)
 pgr
+```
+
+## Computational time
+
+The following code reproduces figure 6, which compares NNDM LOOCV and kNNDM CV regarding their computational time requirements.
+
+```{r figure time analysis, fig.width=8.5,fig.height=6, message=FALSE}
+
+library("ggplot2")
+library("dplyr")
+library("forcats")
+library("tidyr")
+
+time_res <- bind_rows(read.csv("results/time_res_sclust.csv"),
+                      read.csv("results/time_res_rand.csv")) |> 
+  dplyr::select(-1) |> 
+  mutate(distr = case_when(dsample == "random" ~ "Random", dsample == "sclust" ~ "Strong\nclustered"),
+         distr = as.factor(distr),
+         distr = fct_relevel(distr, c("Random", "Strong\nclustered")))
+  
+
+names(time_res) <- c("dsample", "knndm_time_model", "nndm_time_model", "knndm_time_algorithm", "nndm_time_algorithm", "n_tpoints", "distr")
+
+
+# something went wrong with n=100 for random sample distribution
+tm <- time_res |> 
+  dplyr::select(-dsample) |> 
+  mutate(knndm_total = knndm_time_algorithm + knndm_time_model,
+         nndm_total = nndm_time_algorithm + nndm_time_model) |> 
+  group_by(n_tpoints, distr) |> 
+  pivot_longer(!c(n_tpoints, distr)) |> 
+  ungroup()
+
+tm$what <- sub(pattern = ".*_", "", x = tm$name)
+tm$type <- sub(pattern = "\\_.*", "", x = tm$name)
+
+
+tp_ext <- ggplot(tm, aes(x=n_tpoints, y=value/3600, colour=type, group=what)) +
+  geom_point() +
+  facet_grid(distr~what) +
+  scale_colour_discrete(name="", labels=c("kNNDM", "NNDM")) +
+  scale_x_continuous(limits=c(0,5000), breaks=c(0,2500,5000)) +
+  scale_y_log10(labels = function(x) format(x, scientific = FALSE)) +
+  xlab("n training points") +
+  ylab("time [h]") +
+  theme_bw(base_size=15) +
+  theme(legend.position = "bottom")
+
+
+tp_ext
+
+#ggsave("figures/time_analysis.pdf", tp_ext, height=6, width=8.5)
+
+
 ```
 
 
 ## Association CV - True error and W statistic
 
-The following code reproduces figure 6, which shows the association between the absolute value difference between the CV and true map accuracy statistics and W statistic.
+The following code reproduces figure 7, which shows the association between the absolute value difference between the CV and true map accuracy statistics and W statistic.
 
 ```{r figure 4, fig.width=10,fig.height=5, message=FALSE}
 library("ggplot2")
@@ -384,4 +439,5 @@ c <- plot_grid(top_row, NULL, legend_bottom, NULL, nrow=4,
 #ggsave("figures/4_results_W_err.pdf",c, height=5, width=12)
 c
 ```
+
 
