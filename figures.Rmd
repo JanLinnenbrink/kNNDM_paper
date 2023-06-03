@@ -321,7 +321,6 @@ library("tidyr")
 
 time_res <- bind_rows(read.csv("results/time_res_sclust.csv"),
                       read.csv("results/time_res_rand.csv")) |> 
-  dplyr::select(-1) |> 
   mutate(distr = case_when(dsample == "random" ~ "Random", dsample == "sclust" ~ "Strong\nclustered"),
          distr = as.factor(distr),
          distr = fct_relevel(distr, c("Random", "Strong\nclustered")))
@@ -330,7 +329,6 @@ time_res <- bind_rows(read.csv("results/time_res_sclust.csv"),
 names(time_res) <- c("dsample", "knndm_time_model", "nndm_time_model", "knndm_time_algorithm", "nndm_time_algorithm", "n_tpoints", "distr")
 
 
-# something went wrong with n=100 for random sample distribution
 tm <- time_res |> 
   dplyr::select(-dsample) |> 
   mutate(knndm_total = knndm_time_algorithm + knndm_time_model,
