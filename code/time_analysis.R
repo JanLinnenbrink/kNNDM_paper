@@ -12,7 +12,7 @@ wgrid <- st_read(dsn="data/species_vdata.gpkg", layer="landscape_grid")
 
 # Launch simulation for strongly clustered design
 set.seed(1234)
-sims <- sim_species(wgrid, wclim, spoly[1,], "sclust",interval=1:50)
+sims <- sim_species(wgrid, wclim, spoly[1,], "sclust",interval=1:40)
 write_csv(sims, "results/time_res_sclust.csv")
 
 # Launch simulations for random design

@@ -114,7 +114,7 @@ sim_species <- function(rgrid, rstack, sampling_area,
   res <- data.frame()
   
   # Simulate sampling points according to parameters and constraints
-  tr_pts <- as.integer(seq(100, 5000, length.out=50))
+  tr_pts <- as.integer(seq(100, 4000, length.out=40))
 
   tr_pts <- tr_pts[interval]
  

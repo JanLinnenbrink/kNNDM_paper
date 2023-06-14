@@ -12,7 +12,7 @@ knitr::opts_chunk$set(fig.align = 'center', message = FALSE, echo=FALSE,
                       warning = FALSE, fig.width = 8, fig.height = 3)
 ```
 
-This file contains the code to reproduce figures 1, 3, 5 & 6 of the paper "kNNDM: k-fold Nearest Neighbour Distance Matching Cross-Validation for map accuracy estimation" by J Linnenbrink, C Milà, M Ludwig & H Meyer.
+This file contains the code to reproduce figures 1, 3, 5, 6 & 7 of the paper "kNNDM: k-fold Nearest Neighbour Distance Matching Cross-Validation for map accuracy estimation" by J Linnenbrink, C Milà, M Ludwig & H Meyer.
 
 
 
@@ -127,7 +127,7 @@ bottom_row <- plot_grid(reg_dist, rand_dist,  clust_dist, nrow=1)
 comb_pl <- plot_grid(NULL, top_row, NULL, bottom_row, NULL, legend_bottom, NULL,  
                      nrow=7, rel_heights = c(-0.22,1, -0.42,1,-0.7,1,-0.45))
 
-#ggsave("figures/1_example_ecdfs.png", comb_pl, height = 12, width=20, units="cm")
+#ggsave("figures/fig1_example_ecdfs.png", comb_pl, height = 12, width=20, units="cm")
 comb_pl
 ```
 
@@ -136,7 +136,7 @@ comb_pl
 
 This code reproduces the kNNDM workflow shown in figure 3. Several numbers of clusters *q* are compared regarding their W statistic (bottom row).
 
-```{r figure 2, fig.width=12,fig.height=6, message=FALSE}
+```{r figure 3, fig.width=12,fig.height=6, message=FALSE}
 library("ggplot2")
 library("sf")
 library("CAST")
@@ -210,7 +210,7 @@ legend_bottom <- get_legend(dist_plts[[1]] +
                               theme(legend.position = "bottom"))
 c <- plot_grid(NULL,top_row, NULL, bottom_row, NULL, legend_bottom, nrow=6,rel_heights = c(-0.25,1,-0.35,1,-0.2,0.2))
 
-#ggsave("figures/2_method_knndm.pdf",c, height=5, width=12)
+#ggsave("figures/fig3_method_knndm.pdf",c, height=5, width=12)
 c
 ```
 
@@ -219,7 +219,7 @@ c
 
 The following code reproduces figure 5, and shows the differences between cross-validated and true RMSE, R^2 and MAE for different sampling distributions.
 
-```{r figure 3, fig.width=8, fig.height=8, message=FALSE}
+```{r figure 5, fig.width=8, fig.height=8, message=FALSE}
 library("ggplot2")
 library("ggthemes")
 library("cowplot")
@@ -304,68 +304,16 @@ pgr <- plot_grid(diff_rmse, NULL, NULL, NULL,
                  diff_MAE, NULL,NULL, NULL, 
                  nrow=3, rel_widths = c(1, 0.3, 0.3,-0.3), axis="l", align = "v")
 
-ggsave("figures/3_results_sim.pdf", pgr, height=8, width=8)
+#ggsave("figures/fig5_results_sim.pdf", pgr, height=8, width=8)
 pgr
-```
-
-## Computational time
-
-The following code reproduces figure 6, which compares NNDM LOOCV and kNNDM CV regarding their computational time requirements.
-
-```{r figure time analysis, fig.width=8.5,fig.height=6, message=FALSE}
-
-library("ggplot2")
-library("dplyr")
-library("forcats")
-library("tidyr")
-
-time_res <- bind_rows(read.csv("results/time_res_sclust.csv"),
-                      read.csv("results/time_res_rand.csv")) |> 
-  mutate(distr = case_when(dsample == "random" ~ "Random", dsample == "sclust" ~ "Strong\nclustered"),
-         distr = as.factor(distr),
-         distr = fct_relevel(distr, c("Random", "Strong\nclustered")))
-  
-
-names(time_res) <- c("dsample", "knndm_time_model", "nndm_time_model", "knndm_time_algorithm", "nndm_time_algorithm", "n_tpoints", "distr")
-
-
-tm <- time_res |> 
-  dplyr::select(-dsample) |> 
-  mutate(knndm_total = knndm_time_algorithm + knndm_time_model,
-         nndm_total = nndm_time_algorithm + nndm_time_model) |> 
-  group_by(n_tpoints, distr) |> 
-  pivot_longer(!c(n_tpoints, distr)) |> 
-  ungroup()
-
-tm$what <- sub(pattern = ".*_", "", x = tm$name)
-tm$type <- sub(pattern = "\\_.*", "", x = tm$name)
-
-
-tp_ext <- ggplot(tm, aes(x=n_tpoints, y=value/3600, colour=type, group=what)) +
-  geom_point() +
-  facet_grid(distr~what) +
-  scale_colour_discrete(name="", labels=c("kNNDM", "NNDM")) +
-  scale_x_continuous(limits=c(0,5000), breaks=c(0,2500,5000)) +
-  scale_y_log10(labels = function(x) format(x, scientific = FALSE)) +
-  xlab("n training points") +
-  ylab("time [h]") +
-  theme_bw(base_size=15) +
-  theme(legend.position = "bottom")
-
-
-tp_ext
-
-#ggsave("figures/time_analysis.pdf", tp_ext, height=6, width=8.5)
-
-
 ```
 
 
 ## Association CV - True error and W statistic
 
-The following code reproduces figure 7, which shows the association between the absolute value difference between the CV and true map accuracy statistics and W statistic.
+The following code reproduces figure 6, which shows the association between the absolute value difference between the CV and true map accuracy statistics and W statistic.
 
-```{r figure 4, fig.width=10,fig.height=5, message=FALSE}
+```{r figure 6, fig.width=10,fig.height=5, message=FALSE}
 library("ggplot2")
 library("cowplot")
 cor_res <- read.csv("results/sim_res_W.csv")
@@ -431,11 +379,65 @@ legend_bottom <- get_legend(rmse +
                                     legend.key.height  = unit(0.5, "cm"),
                                     plot.margin = unit(c(0, 0, 0, 0), "cm")))
 top_row <- plot_grid(rmse, r2, mae, nrow=1, align="hv")
-c <- plot_grid(top_row, NULL, legend_bottom, NULL, nrow=4,
+comb <- plot_grid(top_row, NULL, legend_bottom, NULL, nrow=4,
                rel_heights = c(1,-0.35,1,-0.4), rel_widths = c(1,1,5,1))
 
-#ggsave("figures/4_results_W_err.pdf",c, height=5, width=12)
-c
+#ggsave("figures/fig6_results_W_err.pdf",c, height=5, width=12)
+comb
+```
+
+
+## Computational time
+
+The following code reproduces figure 7, which compares NNDM LOOCV and kNNDM CV regarding their computational time requirements.
+
+```{r figure 7, fig.width=8.5,fig.height=6, message=FALSE}
+
+library("ggplot2")
+library("dplyr")
+library("forcats")
+library("tidyr")
+
+time_res <- bind_rows(read.csv("results/time_res_sclust.csv"),
+                      read.csv("results/time_res_rand.csv")) |> 
+  mutate(distr = case_when(dsample == "random" ~ "Random", dsample == "sclust" ~ "Strong\nclustered"),
+         distr = as.factor(distr),
+         distr = fct_relevel(distr, c("Random", "Strong\nclustered")))
+  
+
+names(time_res) <- c("dsample", "knndm_time_model", "nndm_time_model", "knndm_time_algorithm", "nndm_time_algorithm", "n_tpoints", "distr")
+
+
+# something went wrong with n=100 for random sample distribution
+tm <- time_res |> 
+  dplyr::select(-dsample) |> 
+  mutate(knndm_total = knndm_time_algorithm + knndm_time_model,
+         nndm_total = nndm_time_algorithm + nndm_time_model) |> 
+  group_by(n_tpoints, distr) |> 
+  pivot_longer(!c(n_tpoints, distr)) |> 
+  ungroup()
+
+tm$what <- sub(pattern = ".*_", "", x = tm$name)
+tm$type <- sub(pattern = "\\_.*", "", x = tm$name)
+
+
+tp_ext <- ggplot(tm, aes(x=n_tpoints, y=value/3600, colour=type, group=what)) +
+  geom_point() +
+  facet_grid(distr~what) +
+  scale_colour_discrete(name="", labels=c("kNNDM", "NNDM")) +
+  scale_x_continuous(limits=c(0,4000), breaks=c(0,2000,4000)) +
+  scale_y_log10(labels = function(x) format(x, scientific = FALSE)) +
+  xlab("n training points") +
+  ylab("time [h]") +
+  theme_bw(base_size=15) +
+  theme(legend.position = "bottom")
+
+
+tp_ext
+
+#ggsave("figures/fig7_time_analysis.pdf", tp_ext, height=6, width=8.5)
+
+
 ```
 
 
