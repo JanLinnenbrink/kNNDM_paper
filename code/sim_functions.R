@@ -5,8 +5,6 @@ library("terra")
 library("CAST")
 library("sf")
 library("caret")
-library("gstat")
-library("virtualspecies")
 library("parallel")
 library("doParallel")
 library("pbapply")
@@ -107,7 +105,7 @@ fitval_rf_species <- function(form,
   kndm_stats <- data.frame(RMSE = err_stats_kndm[[1]],
               MAE = err_stats_kndm[[3]],
               R2 = err_stats_kndm[[2]])
-  names(kndm_stats) <- paste0(names(kndm_stats), "_kndm")
+  names(kndm_stats) <- paste0(names(kndm_stats), "_knndm")
 
   # Validate with NNDM LOO and compute CV statistics (outcome range)
   nndm_cntrl <- trainControl(method="cv",
@@ -176,23 +174,41 @@ sim_species <- function(rgrid, rstack, sampling_area,
     # Define random folds
     folds_random <- CAST::CreateSpacetimeFolds(pts_id, spacevar="rand", k=10)
     # Define folds based on 10-fold cluster CV
-    folds_spatial <- CAST::CreateSpacetimeFolds(pts_id, spacevar="clust.cluster",k=10)
+    folds_spatial <- CAST::CreateSpacetimeFolds(pts_id, spacevar="clust.cluster", k=10)
     # Define folds based on kNNDM
-    folds_kndm <- CAST::knndm(train_points, ppoints = ppoints)
+    folds_knndm <- CAST::knndm(train_points, ppoints = ppoints)
     # Define folds based on NNDM
-    folds_ndm <- CAST::nndm(train_points, ppoints = ppoints, min_train =  0.5)
+    folds_nndm <- CAST::nndm(train_points, ppoints = ppoints, min_train =  0.5)
+    
     #### Model fitting and validation
     mod <- fitval_rf_species(form,
                              folds_spatial$index,
-                             folds_kndm$indx_train,
-                             folds_kndm$indx_test,
-                             folds_ndm$indx_train,
-                             folds_ndm$indx_test,
+                             folds_knndm$indx_train,
+                             folds_knndm$indx_test,
+                             folds_nndm$indx_train,
+                             folds_nndm$indx_test,
                              pgrid, train_data,
                              grid_data)
-
+    
+    #### Compute W statistics for different CV methods
+    # Random CV
+    W_rand <- distclust_proj(pts_id, pts_id$rand)
+    W_rand <- twosamples::wass_stat(W_rand, folds_knndm["Gij"][[1]])
+    # Spatial CV
+    W_spatial <- distclust_proj(pts_id, pts_id$clust.cluster)
+    W_spatial <- twosamples::wass_stat(W_spatial, folds_knndm["Gij"][[1]])    
+    # knndmCV
+    W_knndmCV <- folds_knndm["W"][[1]]
+    # nndmCV
+    W_nndmCV <- twosamples::wass_stat(folds_nndm["Gjstar"][[1]], folds_knndm["Gij"][[1]])
+    W_df <- data.frame(W_rand = W_rand, 
+                       W_spatial = W_spatial,
+                       W_knndmCV = W_knndmCV,
+                       W_nndmCV = W_nndmCV)
+      
     # Store results of the iteration
-    res_it <- cbind(data.frame(dsample=dist_it, stringsAsFactors = FALSE), mod)
+    res_it <- cbind(data.frame(dsample=dist_it, stringsAsFactors = FALSE),
+                    mod, W_df)
     res <- bind_rows(res, res_it)
   }
 
