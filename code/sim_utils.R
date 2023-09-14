@@ -109,3 +109,16 @@ clustered_sample <- function(sarea, nsamples, nparents, radius){
 
   return(res)
 }
+
+# Computes distance between CV folds in projected coordinates
+#' @param tr_coords sf point object indicating training samples
+#' @param folds Integer, character of factor vector
+distclust_proj <- function(tr_coords, folds){
+  tcoords <- sf::st_coordinates(tr_coords)[,1:2]
+  alldist <- rep(NA, length(folds))
+  for(f in unique(folds)){
+    alldist[f == folds] <- c(FNN::knnx.dist(query = tcoords[f == folds,,drop=FALSE],
+                                            data = tcoords[f != folds,,drop=FALSE], k = 1))
+  }
+  alldist
+}
