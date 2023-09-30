@@ -1,0 +1,414 @@
+---
+title: "Results of simulation 2: above-ground biomass and soil organic carbon stock"
+output: pdf_document
+fig-align: center
+date: today
+date-format: iso
+author: Jan Linnenbrink
+editor_options: 
+  chunk_output_type: console
+---
+  
+This file contains the code to reproduce the figures of the appendix of the paper "kNNDM: k-fold Nearest Neighbour Distance Matching Cross-Validation for map accuracy assessment" by Jan Linnenbrink, Carles Milà, Marvin Ludwig and Hanna Meyer. The appendix consists of a second simulation, that is based on the above-ground biomass example presented in de Bruin et al. (2022, https://doi.org/10.1016/j.ecoinf.2022.101665).
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE)
+knitr::opts_chunk$set(warning=FALSE)
+knitr::opts_chunk$set(message=FALSE)
+```
+
+## Workflow
+
+This code reproduces the workflow of the second simulation shown in Figure S1.
+A) shows 5 of the 22 predictors, as well as the outcome (the above-ground biomass map).
+B) shows one example of the 5 different realizations of the 5,000 sample points.
+The raster datasets and the AOI shapefile were not uploaded on Github due to their
+large size, but can be downloaded from https://zenodo.org/record/6513429.
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(sf)
+library(terra)
+library(tidyterra)
+library(cowplot)
+library(forcats)
+
+infolder  <- "simulation2_AGB/data/"
+smpl <- c("simpleRandom", "regular", "clusterMedium", "clusterStrong", "clusterGapped")
+title_smpl <- c("random", "regular", "weak clustered", "medium clustered", "strong clustered")
+loadRData <- function(fileName){
+    load(fileName)
+    get(ls()[ls() != "fileName"])
+}
+
+# load example points
+pts_sf <- paste0(infolder, smpl, "/AGBdata001.Rdata") |>
+  lapply(function(x) loadRData(x))
+
+pts_sf <- lapply(1:length(pts_sf), function(i) {
+  pts_sf[[i]] <- data.frame(x=pts_sf[[i]]$xcoord * 1000, y=pts_sf[[i]]$ycoord * 1000) |> 
+    st_as_sf(coords=c("x", "y"), crs="epsg:3035")
+  
+  pts_sf[[i]]$sampling <- smpl[[i]]
+  if(nrow(pts_sf[[i]]) < 5000) {
+    pts_sf[[i]][nrow(pts_sf[[i]]):5000, ] <- NA
+  }
+  pts_sf[[i]] |> 
+    select(sampling)
+})
+
+pts_sf <- do.call(rbind, pts_sf) |> 
+  mutate(sampling = case_when(sampling=="simpleRandom" ~ "random",
+                              sampling=="regular" ~ "regular",
+                              sampling=="clusterMedium" ~ "weak clustered",
+                              sampling=="clusterStrong" ~ "medium clustered",
+                              sampling=="clusterGapped" ~ "strong clustered"),
+         sampling = as.factor(sampling),
+         sampling = fct_relevel(sampling, c("random", "regular", "weak clustered", "medium clustered", "strong clustered")))
+
+
+# load AOI
+aoi <- st_read("~/CrossValidation/data_sim_AGB/strata.shp") |> 
+  st_union() 
+st_crs(aoi) <- st_crs(pts_sf)
+
+
+# load AGB stack and response surface
+AGBstack <- rast("~/CrossValidation/data_sim_AGB/AGBstack.tif")
+AGB_sample <- AGBstack[[c(3:7,1)]] |> 
+  aggregate(10) 
+nx <- minmax(AGB_sample)    
+AGB_sample <- (AGB_sample - nx[1,]) / (nx[2,] - nx[1,])
+names(AGB_sample) <- c("bio1","bio5", "bio7", "bio12", "bio15", "outcome")
+
+
+# plot sample points
+pts_pl <- ggplot() +
+  geom_sf(data=aoi, fill=NaN) +
+    geom_sf(data=pts_sf |> drop_na(), size=0.01, alpha=1,colour="blue4")+
+    theme_bw()+
+    theme(legend.position = NaN,
+          title = element_text(size=9)) +
+  facet_wrap(~sampling, ncol=2)
+
+pred_map <- ggplot() +
+  geom_spatraster(data=AGB_sample) +
+  scale_fill_viridis_c("",na.value="transparent") +
+  facet_wrap(~lyr, ncol = 2)  +
+  theme_bw() +
+  theme(legend.position = NaN)
+
+legend_pred <- get_legend(pred_map +
+                              guides(fill = guide_colorbar(nrow = 1)) +
+                              theme(legend.position = "bottom", 
+                                    legend.key.width = unit(1, "cm"),
+                                    legend.key.height = unit(0.4, "cm")))
+
+legend_pred <- plot_grid(legend_pred, NULL, ncol=2)
+
+pred_pts_mp <- plot_grid(pred_map, pts_pl, ncol=2, align="vh",labels = "AUTO",
+                         vjust=3.8)
+pred_pts_mp <- plot_grid(pred_pts_mp, NULL, legend_pred, nrow=3, rel_heights = c(1,-0.1,0.2))
+
+#ggsave("figures/fig8_AGB_simulation.pdf", pred_pts_mp, width=8, height=6)
+pred_pts_mp
+```
+
+## Comparison of the performance of different CV methods
+
+Differences between Cross-Validated and true RMSE for the second simulation (Figure S2). kNNDM [tuned] refers to the kNNDM split that yielded the lowest W statistic among different numbers of k [2,20].
+
+```{r calculate RMSE estimated by CV - the true RMSE}
+
+infolder  <- "simulation2_AGB/results/"
+outfolder <- "figures"
+mets <- c("exhaustive_caret_5k", "random_caret_5k", "spatial_caret_5k", "knndm_caret_5k_3", 
+          "knndm_tuned", "knndm_tuned_sclust")
+colnms <- c("method", "variate", "design", "number", "RMSE", "k")
+outtab <- data.frame(matrix(NA, 0, 6))
+names(outtab) <- colnms
+
+for(m in mets){
+  p <- file.path(infolder, m)
+  f_ins <- list.files(p, glob2rx("???_*.Rdata"))
+  for(f_in in f_ins){
+    lchar <- nchar(f_in)
+    variate <- substr(f_in, 1, 3)
+    design <- substr(f_in, 5, lchar-9)
+    number <- as.numeric(substr(f_in, lchar-8, lchar-6))
+    load(file.path(p, f_in))
+    RMSE   <- mean(RMSE)
+    k <- NaN
+    if(m == "knndm_tuned" | m == "knndm_tuned_sclust") {
+      RMSE <- k_err_tuned$RMSE
+      m <- "knndm_tuned"
+      k <- k_err_tuned$k
+    }
+    
+    newrow <- data.frame(method = m, variate = variate, design = design,
+                         number = number, RMSE = RMSE, k=k)
+    outtab <- rbind(outtab, newrow)
+  }
+}
+
+outtab$methodID <- with(outtab, ifelse(method=="exhaustive_caret_5k",0,1))
+
+outtab$rRMSE <- NA
+
+numbers=1:100
+for(design in unique(outtab$design)){
+    for(number in numbers){
+      idx1 <- which(outtab$design == design & outtab$number == number)
+      idx2 <- which(outtab$design == design & outtab$methodID == 0 & outtab$number == number)
+      
+      outtab$rRMSE[idx1] <- outtab$RMSE[idx1] - outtab$RMSE[idx2]
+    }
+}
+
+outtab$method <- factor(outtab$method, levels=mets)
+outtab$design <- factor(outtab$design, levels=c("simpleRandom", "regular", "clusterMedium", 
+                                                "clusterStrong", "clusterGapped"))
+outtab$variate <- as.factor(outtab$variate)
+
+write.csv(outtab, file.path(infolder, "outtab100.csv"))
+```
+
+
+```{r generate the plot of RMSE (CV) - RMSE (true)}
+
+#| fig-align: center
+#| fig-width: 5
+
+library(ggplot2)
+library(ggthemes)
+
+outtab <- read.csv(file.path(infolder, "outtab100.csv"))
+outtab$method <- factor(outtab$method, levels=mets)
+outtab$design <- factor(outtab$design, levels=c("simpleRandom", "regular", "clusterMedium", 
+                                                "clusterStrong", "clusterGapped"))
+outtab$variate <- as.factor(outtab$variate)
+
+CVmethod_labs <- c("random", "spatial", "kNNDM", "kNNDM [tuned]")
+xlabs <- c("random","regular","weak\nclustered","medium\nclustered","strong\nclustered")
+
+lw <- 0.6
+w <- 0.45
+diff_RMSE <- ggplot(outtab[outtab$methodID!=0,], aes(x=design, y=rRMSE, colour=method, linetype=method)) +
+    geom_boxplot(lwd=lw, width=w,position=position_dodge(0.6)) +
+    geom_hline(yintercept = 0, linetype="solid", alpha=0.6) +
+    scale_colour_manual(values = c("black", "#E69F00", "#009E73", "#009E73"),name="CV method", labels=CVmethod_labs) +
+    scale_linetype_manual(values=c("solid", "solid", "solid", "dashed"),name="CV method", labels=CVmethod_labs) +
+    scale_x_discrete(labels=xlabs) +
+    ylab("CV - true RMSE") + 
+    xlab("") +
+    scale_y_continuous(breaks=c(-15,-10,-5,0,5,10)) +
+    theme_bw() +
+    theme(legend.position = "bottom")
+
+k_sel <- ggplot(outtab[!is.na(outtab$k),], aes(x=k)) +
+  geom_histogram() +
+  scale_x_continuous(breaks=seq(2,20,2)) +
+    ylab("times selected") +
+  facet_wrap(~design, labeller=as_labeller(c(`clusterStrong`= "medium clustered", `clusterGapped` = "strong clustered"))) +
+  theme_bw()
+
+#ggsave("figures/fig8_RMSE_diff_AGB.pdf", diff_RMSE, height = unit(4, "cm"), width=unit(6, "cm"))
+#ggsave("figures/fig11_k_sel.pdf", k_sel, height=3.5, width=6)
+diff_RMSE
+
+```
+
+
+## Different numbers of k
+Following, figure S3 is reproduced, which shows the influence of different numbers of k on the difference between the Cross-Validated and true RMSE (upper row), and on the W stat (lower row). Note that the values of the W statistic were log-scaled.
+
+```{r}
+library(ggplot2)
+library(cowplot)
+library(dplyr)
+library(forcats)
+library(tidyr)
+library(ggh4x)
+library(scales)
+library(ggtext)
+
+infolder  <- "simulation2_AGB/results"
+outfolder <- "figures"
+mets <- c("exhaustive_caret_5k", "knndm_k", "knndm_k_random", "knndm_k_regular",
+          "knndm_k_medium", "knndm_k_cstrong")
+colnms <- c("method", "variate", "design", "number", "RMSE", "W", "k")
+outtab <- data.frame(matrix(NA, 0, 7))
+names(outtab) <- colnms
+
+for(m in mets){
+  p <- file.path(infolder, m)
+  f_ins <- list.files(p, glob2rx("???_*.Rdata"))
+  for(f_in in f_ins){
+    lchar <- nchar(f_in)
+    variate <- substr(f_in, 1, 3)
+    
+    design <- substr(f_in, 5, lchar-9)
+    number <- as.numeric(substr(f_in, lchar-8, lchar-6))
+    load(file.path(p, f_in))
+
+  if(m=="exhaustive_caret_5k") {
+      RMSE <- RMSE
+      W = NaN
+      k <- NaN
+  } else {
+      RMSE <- k_err$RMSE
+      W <- k_err$W
+      k <- k_err$k
+  }
+    newrow <- data.frame(method = m, variate = variate, design = design, number = number, 
+                         RMSE = RMSE, W = W, k=k)
+    outtab <- rbind(outtab, newrow)
+    } 
+    
+}
+
+numbers=1:100
+outtab$rRMSE <- NA
+
+variate="AGB"
+outtab$methodID <- with(outtab, ifelse(method=="exhaustive_caret_5k",0,1))
+outtab$method <- with(outtab, ifelse(method!="exhaustive_caret_5k","kNNDM","exhaustive"))
+
+for(design in unique(outtab$design)){
+    for(number in numbers){
+      idx1 <- which(outtab$design == design & outtab$number == number & outtab$variate == variate)
+      idx2 <- which(outtab$design == design & outtab$methodID == 0 & outtab$number == number & 
+                      outtab$variate == variate)
+      
+      outtab$rRMSE[idx1] <- outtab$RMSE[idx1] - outtab$RMSE[idx2]
+    }
+}
+
+pl_tab <- outtab |> 
+  filter(methodID!=0) |> 
+  mutate(design = case_when(design=="clusterGapped" ~ "strong~clustered",
+                             design=="clusterStrong" ~ "medium~clustered",
+                             design=="clusterMedium" ~ "weak~clustered",
+                             design=="regular" ~ "regular",
+                             design=="simpleRandom" ~ "random"),
+         design=fct_relevel(design, c("random", "regular", "weak~clustered",
+                                      "medium~clustered", "strong~clustered")),
+         k = as.factor(k)) |>
+  rename("CV-true RMSE" = rRMSE, "log10(W)"=W) |> 
+  select(-c(variate, methodID, method,RMSE, number)) |> 
+  pivot_longer(-c(design, k)) 
+
+pl_tab$name <- as.factor(pl_tab$name)
+levels(pl_tab$name) <- c("CV-true~RMSE", expression("log"[10]*"(W)"))
+
+m <- 0.5
+b.size <- 20
+lw <- 0.6
+
+W_RMSE <- ggplot(pl_tab, aes(x=k, y=ifelse(name == "CV-true~RMSE", value, log10(value)))) +
+    geom_boxplot(position=position_dodge(0.6), lwd=lw) +
+  geom_hline(yintercept = 0) +
+  scale_y_continuous("") +
+    xlab("k") +
+    theme_bw(base_size=b.size) +
+    theme(aspect.ratio=1, legend.position = "None",
+          plot.margin = unit(unit(rep(m,4), "cm")),
+          axis.text.x = element_markdown(),
+          panel.grid.minor   = element_blank()) +
+  facet_grid(rows=vars(name), cols=vars(design),
+             scales="free_y", labeller=label_parsed)
+W_RMSE
+
+#ggsave("figures/fig9_different_k.pdf", W_RMSE, height=8, width=15)
+
+```
+
+
+
+## Association CV - True error and W statistic
+
+The following code reproduces figure S4, which shows the relationship between the absolute value difference between the Cross-Validated and true RMSE with the W statistic in the strongly clustered design of the second simulation. Here, the W statistic explained 37\% of the variation in the absolute value differences.
+
+```{r}
+library(ggplot2)
+
+infolder  <- "simulation2_AGB/results"
+outfolder <- "figures"
+mets <- c("exhaustive_caret_5k", "knndm_W_AGB") #knndm_W
+colnms <- c("method", "variate", "design", "number", "RMSE", "W")
+outtab <- data.frame(matrix(NA, 0, 6))
+names(outtab) <- colnms
+
+
+for(m in mets){
+  p <- file.path(infolder, m)
+  f_ins <- list.files(p, glob2rx("???_*.Rdata"))
+  for(f_in in f_ins){
+    lchar <- nchar(f_in)
+    variate <- substr(f_in, 1, 3)
+    design <- substr(f_in, 5, lchar-9)
+    number <- as.numeric(substr(f_in, lchar-8, lchar-6))
+    load(file.path(p, f_in))
+    if(m=="knndm_W_AGB") {
+      RMSE <- kndm_stats$RMSE_kndm
+      W_kndm = kndm_stats$W_kndm
+      } else {
+      RMSE <- RMSE
+      W_kndm = NaN
+      }
+    
+    newrow <- data.frame(method = m, variate = variate, design = design, number = number, 
+                         RMSE = RMSE, W = W_kndm)
+    outtab <- rbind(outtab, newrow)
+  }
+}
+
+numbers=1:100
+outtab$rRMSE <- NA
+
+outtab$methodID <- with(outtab, ifelse(method=="exhaustive_caret_5k",0,1))
+
+for(number in numbers){
+      idx1 <- which(outtab$design == design & outtab$variate == variate & 
+                      outtab$number == number)
+      idx2 <- which(outtab$design == design & outtab$variate == variate & 
+                      outtab$methodID == 0 & outtab$number == number)
+      
+      outtab$rRMSE[idx1] <- outtab$RMSE[idx1] - outtab$RMSE[idx2]
+}
+
+
+
+
+outtab$method <- factor(outtab$method, levels=c("exhaustive_caret_5k", "knndm_W_AGB"))
+
+m <- 0.5
+b.size <- 20
+out_W <- outtab[outtab$method=="knndm_W_AGB",]
+lm_rmse <- lm(abs(rRMSE)~W, out_W)
+r2_rmse <- round(summary(lm_rmse)$r.squared,2)
+pred_rmse <- predict(lm_rmse, out_W)
+
+print(paste("Rsquared for RMSE:", r2_rmse))
+
+# only for clusterGapped design
+
+W_RMSE <- ggplot(data=out_W, aes(x=W,y=abs(rRMSE))) +
+    geom_bin_2d(bins=30) +
+    geom_line(aes(y=pred_rmse), col="black", linewidth=1.2) +
+    scale_fill_viridis_b() + #trans="log10"
+    scale_x_continuous(n.breaks = 3,labels = function(x) format(x, scientific = FALSE)) +
+    ylab(expression(abs(CV - true~RMSE))) +
+    xlab("W") +
+    theme_bw(base_size=b.size) +
+    theme(aspect.ratio=1, legend.position = "right",
+          plot.margin = unit(unit(rep(m,4), "cm")))
+
+
+#ggsave("figures/fig10_W_RMSE_AGB.pdf", W_RMSE, height=5, width=12)
+W_RMSE
+```
+
+
