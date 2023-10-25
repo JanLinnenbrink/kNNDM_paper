@@ -2,7 +2,7 @@
 title: "Results of simulation 2: above-ground biomass (AGB)"
 output: pdf_document
 fig-align: center
-date: today
+date: 2023-10-25
 date-format: iso
 author: Jan Linnenbrink
 editor_options: 
@@ -112,7 +112,7 @@ pred_pts_mp <- plot_grid(pred_map, pts_pl, ncol=2, align="vh",labels = "AUTO",
                          vjust=3.8)
 pred_pts_mp <- plot_grid(pred_pts_mp, NULL, legend_pred, nrow=3, rel_heights = c(1,-0.1,0.2))
 
-ggsave("figures/fig9_AGB_simulation.pdf", pred_pts_mp, width=8, height=6)
+#ggsave("figures/fig9_AGB_simulation.pdf", pred_pts_mp, width=8, height=6)
 pred_pts_mp
 ```
 
@@ -207,7 +207,7 @@ diff_RMSE <- ggplot(outtab[outtab$methodID!=0,], aes(x=design, y=rRMSE, colour=m
     theme_bw() +
     theme(legend.position = "bottom")
 
-ggsave("figures/fig10_RMSE_diff_AGB.pdf", diff_RMSE, height = unit(4, "cm"), width=unit(6, "cm"))
+#ggsave("figures/fig10_RMSE_diff_AGB.pdf", diff_RMSE, height = unit(4, "cm"), width=unit(6, "cm"))
 diff_RMSE
 
 ```
@@ -287,7 +287,7 @@ W_RMSE <- ggplot(data=out_W, aes(x=W,y=abs(rRMSE))) +
           plot.margin = unit(unit(rep(m,4), "cm")))
 
 
-ggsave("figures/fig11_W_RMSE_AGB.pdf", W_RMSE, height=5, width=12)
+#ggsave("figures/fig11_W_RMSE_AGB.pdf", W_RMSE, height=5, width=12)
 W_RMSE
 ```
 
@@ -393,7 +393,7 @@ W_RMSE <- ggplot(pl_tab, aes(x=k, y=ifelse(name == "CV-true~RMSE", value, log10(
              scales="free_y", labeller=label_parsed)
 W_RMSE
 
-ggsave("figures/fig12_different_k.pdf", W_RMSE, height=8, width=15)
+#ggsave("figures/fig12_different_k.pdf", W_RMSE, height=8, width=15)
 
 ```
 
