@@ -150,8 +150,7 @@ sim_species <- function(rgrid, rstack, sampling_area,
   grid_data <- as.data.frame(terra::extract(rstack, terra::vect(rgrid)))
   form <- as.formula(paste0("outcome~", paste0("bio", 1:19, collapse="+")))
   pgrid<- data.frame(mtry=6)
-  res <- data.frame()
-  
+
   i <- 0
   # Start sampling loop
   for(dist_it in sample_dist){

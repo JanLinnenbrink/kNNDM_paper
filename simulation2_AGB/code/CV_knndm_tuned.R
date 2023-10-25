@@ -1,13 +1,12 @@
 # *****************************************************************************
 # R Script for tuning the kNNDM k-fold CV (i.e., for selecting the number 
 # of k that yields the lowest W statistic).
-# Modified from doi
+# Modified from https://doi.org/10.5281/zenodo.6514923
 # *****************************************************************************
 
 # ****** load required libraries *******
 #.libPaths("~/r_packages/")
 
-setwd("simulation2_AGB/")
 library(CAST)
 library(sf)
 library(raster)
@@ -15,8 +14,10 @@ library(caret)
 library(parallel)
 
 # ************ GLOBALS ***************
-infolder <- "data"
-outfolder <- "results"
+infolder <- "simulation2_AGB/data"
+outfolder <- "simulation2_AGB/results"
+samples   <- c("clusterMedium", "clusterStrong", "clusterGapped", "regular", 
+               "simpleRandom")
 startseed <- 1234567
 n_samp <- 100  # number of sample replicates
 cores <- 20 # number of cores for parallel computing
@@ -26,14 +27,14 @@ num_k <- seq(2,20,by=2) # tested numbers of k
 if(!dir.exists(outfolder))
   dir.create(outfolder)
 
-if(!dir.exists(paste0(outfolder, "/knndm_tuned_sclust")))
-  dir.create(paste0(outfolder, "/knndm_tuned_sclust"))
+if(!dir.exists(paste0(outfolder, "/knndm_tuned")))
+  dir.create(paste0(outfolder, "/knndm_tuned"))
 
 # ************ FUNCTIONS ***************
 knndmCV <- function(smpl, number, variate, seed, num_k){
   
   fname  <-  paste0(variate, "_", smpl, sprintf("%03d", number), ".Rdata")
-  f_out  <- file.path(outfolder,"knndm_tuned_sclust", fname)
+  f_out  <- file.path(outfolder,"knndm_tuned", fname)
   
   fname <- paste0(variate, "data", sprintf("%03d", number), ".Rdata")
   f_in <- file.path(infolder,smpl,fname)
@@ -77,6 +78,8 @@ knndmCV <- function(smpl, number, variate, seed, num_k){
 
 # ************ CALL THE FUNCTIONS ************ 
 mclapply(seq(n_samp), function(i) {
-  knndmCV("clusterStrong", i, "AGB", startseed, num_k)
+  for(smpl in samples) {
+    knndmCV(smpl, i, "AGB", startseed, num_k)
+  }
 }, mc.cores = cores)
 

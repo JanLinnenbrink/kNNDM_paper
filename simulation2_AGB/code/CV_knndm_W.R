@@ -1,13 +1,12 @@
 # *****************************************************************************
 # R Script for calculating the W statistic and RMSE associated with each
 # split in the kNNDM function.
-# Modified from doi
+# Modified from https://doi.org/10.5281/zenodo.6514923
 # *****************************************************************************
 
 # ****** load required libraries *******
 #.libPaths("~/r_packages/")
 
-setwd("simulation2_AGB/")
 library(ranger)
 library(CAST)
 library(sf)
@@ -19,8 +18,10 @@ source("simulation1_virtualSpecies/code/knndm_W.R")
 
 # ************ GLOBALS ***************
 
-infolder <- "data"
-outfolder <- "results"
+infolder <- "simulation2_AGB/data"
+outfolder <- "simulation2_AGB/results"
+samples   <- c("clusterMedium", "clusterStrong", "clusterGapped", "regular", 
+               "simpleRandom")
 startseed <- 1234567
 n_samp <- 100  # number of sample replicates (for each design)
 cores <- 30 # number of cores for parallel computing
@@ -29,8 +30,8 @@ cores <- 30 # number of cores for parallel computing
 if(!dir.exists(outfolder))
   dir.create(outfolder)
 
-if(!dir.exists(paste0(outfolder, "/knndm_W_AGB_clStr")))
-  dir.create(paste0(outfolder, "/knndm_W_AGB_clStr"))
+if(!dir.exists(paste0(outfolder, "/knndm_W")))
+  dir.create(paste0(outfolder, "/knndm_W"))
 
 
 # ************ FUNCTIONS ***************
@@ -40,7 +41,7 @@ knndmCV <- function(smpl, number, variate, seed){
   
   
   fname  <-  paste0(variate, "_", smpl, sprintf("%03d", number), ".Rdata")
-  f_out  <- file.path(outfolder,"knndm_W_AGB_cl_Str", fname)
+  f_out  <- file.path(outfolder,"knndm_W", fname)
   fname <- paste0(variate, "data", sprintf("%03d", number), ".Rdata")
   f_in <- file.path(infolder,smpl,fname)
   load(f_in)
@@ -64,7 +65,6 @@ knndmCV <- function(smpl, number, variate, seed){
   
   kndm_folds <- kndm_out$clusters
   W <- kndm_out$W
-  message("ksplit completed") 
   if (class(kndm_folds)=="list") {
     kndm_stats <- lapply(seq_along(kndm_folds), function(i) {
       fdf <- data.frame(f=kndm_folds[[i]])
@@ -95,9 +95,7 @@ knndmCV <- function(smpl, number, variate, seed){
       train(form, data, respect.unordered.factors=TRUE, method = "ranger",
             trControl=kndm_ctrl))
     kndm_stats <- kndm_out_mod$pred |> 
-      dplyr::summarise(RMSE = sqrt(mean((obs-pred)^2)),
-                       MAE = mean(abs(obs-pred)),
-                       R2 = cor(obs, pred)^2, W=W)
+      dplyr::summarise(RMSE = sqrt(mean((obs-pred)^2)), W=W)
     names(kndm_stats) <- paste0(names(kndm_stats), "_kndm")
   }
   save(kndm_stats, file=f_out)
@@ -107,8 +105,8 @@ knndmCV <- function(smpl, number, variate, seed){
 
 # ************ CALL THE FUNCTIONS ************ 
 mclapply(seq(n_samp), function(i) {
-  
-  knndmCV("clusterStrong", i, "AGB", startseed)
-  
+  for(smpl in samples) {
+    knndmCV(smpl, i, "AGB", startseed)
+  }
 }, mc.cores = cores)
 

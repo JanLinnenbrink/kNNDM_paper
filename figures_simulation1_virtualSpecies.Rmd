@@ -233,14 +233,14 @@ sim_res <- read.csv("simulation1_virtualSpecies/results/sim_res.csv")
 sim_diff <- data.frame(rmse_rand = sim_res$RMSE_rand - sim_res$RMSE_surf,
                        rmse_spatial = sim_res$RMSE_spatial - sim_res$RMSE_surf,
                        rmse_nndm = sim_res$RMSE_nndm - sim_res$RMSE_surf,
-                       rmse_kndm = sim_res$RMSE_kndm - sim_res$RMSE_surf,
-                       r2_rand =  -1*(sim_res$R2_rand - sim_res$R2_surf),
-                       r2_spatial= -1*(sim_res$R2_spatial - sim_res$R2_surf),
-                       r2_nndm = -1*(sim_res$R2_nndm - sim_res$R2_surf),
-                       r2_kndm = -1*(sim_res$R2_kndm - sim_res$R2_surf),
+                       rmse_knndm = sim_res$RMSE_knndm - sim_res$RMSE_surf,
+                       r2_rand =  sim_res$R2_rand - sim_res$R2_surf,
+                       r2_spatial= sim_res$R2_spatial - sim_res$R2_surf,
+                       r2_nndm = sim_res$R2_nndm - sim_res$R2_surf,
+                       r2_knndm = sim_res$R2_knndm - sim_res$R2_surf,
                        mae_rand = sim_res$MAE_rand - sim_res$MAE_surf,
                        mae_spatial = sim_res$MAE_spatial - sim_res$MAE_surf,
-                       mae_kndm = sim_res$MAE_kndm - sim_res$MAE_surf,
+                       mae_knndm = sim_res$MAE_knndm - sim_res$MAE_surf,
                        mae_nndm = sim_res$MAE_nndm - sim_res$MAE_surf,
                        dsample = sim_res$dsample) |>
   pivot_longer(!dsample) |>
@@ -255,7 +255,7 @@ sim_diff <- data.frame(rmse_rand = sim_res$RMSE_rand - sim_res$RMSE_surf,
          CV_method = case_when(grepl("rand", name) ~ "random 10-fold",
                                grepl("spatial", name) ~ "spatial 10-fold",
                                grepl("nndm", name) ~ "NNDM LOO",
-                               grepl("kndm", name) ~ "kNNDM 10-fold"),
+                               grepl("knndm", name) ~ "kNNDM 10-fold"),
          CV_method = fct_relevel(CV_method, "random 10-fold",  "spatial 10-fold","NNDM LOO","kNNDM 10-fold"),
          group = case_when(startsWith(name, "rmse") ~ "RMSE",
                            startsWith(name, "mae") ~ "MAE",
@@ -309,12 +309,69 @@ pgr
 
 # get mean and sd
 sim_diff |> 
-  filter(name %in% c("rmse_kndm", "rmse_nndm", "mae_kndm", "mae_nndm") & dsample == "sclust") |> 
+  filter(name %in% c("rmse_knndm", "rmse_nndm", "mae_knndm", "mae_nndm") & dsample == "sclust") |> 
   group_by(name, dsample) |> 
   summarise(mean = mean(value), 
             sd = sd(value)) 
 ```
 
+
+## Different numbers of k
+
+CV error estimates for kNNDM CV with different numbers of $k$ (first three rows). The respective W stat is shown in the fourth row.
+
+```{r figure 5, fig.width=8, fig.height=8, message=FALSE}
+library("ggplot2")
+library("ggthemes")
+library("cowplot")
+library("dplyr")
+library("tidyr")
+library("forcats")
+
+# read and process the simulation results
+sim_res <- read.csv("simulation1_virtualSpecies/results/sim_res_k1.csv")
+
+sim_diff <- data.frame(rmse_knndm = sim_res$RMSE_knndm - sim_res$RMSE_surf,
+                       r2_knndm = sim_res$R2_knndm - sim_res$R2_surf,
+                       mae_knndm = sim_res$MAE_knndm - sim_res$MAE_surf,
+                       W_knndm = sim_res$W_knndmCV,
+                       dsample = sim_res$dsample, k=sim_res$k) |>
+  pivot_longer(!c(dsample,k)) |>
+  mutate(distr = case_when(dsample == "sregular" ~ "Strong~regular",
+                                     dsample == "wregular" ~ "Weak~regular",
+                                     dsample == "random" ~ "Random",
+                                     dsample == "wclust" ~ "Weak~clustered",
+                                     dsample == "sclust" ~ "Strong~clustered"),
+         distr = as.factor(distr),
+         distr = fct_relevel(distr, c("Strong~regular", "Weak~regular", "Random",
+                                   "Weak~clustered", "Strong~clustered")),
+         CV_method = "kNNDM 10-fold",
+         group = case_when(startsWith(name, "rmse") ~ "CV-true~RMSE",
+                           startsWith(name, "mae") ~ "CV-true~MAE",
+                           startsWith(name, "r2") ~ "CV-true~R^2",
+                           startsWith(name, "W_") ~ "W"),
+         group=fct_relevel(group, "CV-true~RMSE", "CV-true~R^2", "CV-true~MAE", "W"))
+
+lw <- 0.4
+w <- 0.45
+base.size <- 12
+
+k_pl <- ggplot(sim_diff, aes(x=k, group=k, y=value)) +
+    geom_boxplot(position=position_dodge(0.6), lwd=lw, outlier.size = lw) +
+  geom_hline(yintercept = 0) +
+  scale_y_continuous("") +
+  scale_x_continuous(breaks=seq(2,20,6)) +
+    xlab("k") +
+    theme_bw(base_size = base.size) +
+    theme(aspect.ratio = 1, legend.position = "None",
+          #axis.text.x = element_markdown(),
+          panel.grid.minor = element_blank()) +
+  facet_grid(rows=vars(group), cols=vars(distr),
+             scales="free_y", labeller=label_parsed)
+
+ggsave("figures/fig7_diff_k.pdf", k_pl, height=6, width=8)
+k_pl
+```
 
 ## Association CV - True error and W statistic
 
@@ -324,9 +381,9 @@ The following code reproduces figure 6, which shows the association between the 
 library("ggplot2")
 library("cowplot")
 cor_res <- read.csv("simulation1_virtualSpecies/results/sim_res_W.csv")
-cor_diff <- data.frame(rmse_diff = cor_res$RMSE_kndm - cor_res$RMSE_surf,
-                       r2_diff = cor_res$R2_kndm - cor_res$R2_surf,
-                       mae_diff = cor_res$MAE_kndm - cor_res$MAE_surf,
+cor_diff <- data.frame(rmse_diff = cor_res$RMSE_knndm - cor_res$RMSE_surf,
+                       r2_diff = cor_res$R2_knndm - cor_res$R2_surf,
+                       mae_diff = cor_res$MAE_knndm - cor_res$MAE_surf,
                        ws = cor_res$WS,
                        dsample = cor_res$dsample)
 
@@ -389,7 +446,7 @@ top_row <- plot_grid(rmse, r2, mae, nrow=1, align="hv")
 comb <- plot_grid(top_row, NULL, legend_bottom, NULL, nrow=4,
                rel_heights = c(1,-0.35,1,-0.4), rel_widths = c(1,1,5,1))
 
-#ggsave("figures/fig6_results_W_err.pdf",c, height=5, width=12)
+#ggsave("figures/fig6_results_W_err.pdf",comb, height=5, width=12)
 comb
 ```
 
@@ -431,7 +488,7 @@ tm$type <- sub(pattern = "\\_.*", "", x = tm$name)
 tp_ext <- ggplot(tm, aes(x=n_tpoints, y=value/3600, colour=type, group=what)) +
   geom_point() +
   facet_grid(distr~what) +
-  scale_colour_discrete(name="", labels=c("kNNDM", "NNDM")) +
+  scale_colour_discrete(name="", labels=c("kNNDM 10-fold CV", "NNDM LOO CV")) +
   scale_x_continuous(limits=c(0,4000), breaks=c(0,2000,4000)) +
   scale_y_log10(labels = function(x) format(x, scientific = FALSE)) +
   xlab("n training points") +
@@ -442,7 +499,7 @@ tp_ext <- ggplot(tm, aes(x=n_tpoints, y=value/3600, colour=type, group=what)) +
 
 tp_ext
 
-#ggsave("figures/fig7_time_analysis.pdf", tp_ext, height=6, width=8.5)
+#ggsave("figures/fig8_time_analysis.pdf", tp_ext, height=6, width=8.5)
 
 
 ```
