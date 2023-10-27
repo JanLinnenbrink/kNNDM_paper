@@ -4,9 +4,9 @@ This repository contains the R-scripts used in the paper "kNNDM: k-fold Nearest 
 
 The figures are stored in [figures](figures/) and can be reproduced using the following functions:
 
-* [figures_simulation1_virtualSpecies.Rmd](figures_simulation1_virtualSpecies.Rmd): R-Markdown file to reproduce the figures of simulation 1, which is presented in the main manuscript. [figures.pdf](figures_simulation1_virtualSpecies.pdf) shows the output as one pdf document.
+* [figures_simulation1_virtualSpecies.Rmd](figures_simulation1_virtualSpecies.Rmd): R-Markdown file to reproduce the figures of simulation 1, which is presented in the main manuscript. [figures_simulation1_virtualSpecies.pdf](figures_simulation1_virtualSpecies.pdf) shows the output as one pdf document.
 
-* [figures_simulation2_AGB.Rmd](figures_simulation2_AGB.Rmd): R-Markdown file to reproduce the figures of simulation 2, which is presented in the supplementary. [figures.pdf](figures_simulation2_AGB.pdf) shows the output as one pdf document.
+* [figures_simulation2_AGB.qmd](figures_simulation2_AGB.qmd): Quarto file to reproduce the figures of simulation 2, which is presented in the supplementary. [figures_simulation2_AGB.pdf](figures_simulation2_AGB.pdf) shows the output as one pdf document.
 
 
 
