@@ -33,7 +33,7 @@ library(forcats)
 
 infolder  <- "simulation2_AGB/data/"
 smpl <- c("regular", "simpleRandom", "clusterMedium", "clusterStrong", "clusterGapped")
-title_smpl <- c("regular", "random", "weak clustered", "medium clustered", "strong clustered")
+title_smpl <- c("regular", "random", "weakly clustered", "medium clustered", "strongly clustered")
 loadRData <- function(fileName){
     load(fileName)
     get(ls()[ls() != "fileName"])
@@ -58,11 +58,11 @@ pts_sf <- lapply(1:length(pts_sf), function(i) {
 pts_sf <- do.call(rbind, pts_sf) |> 
   mutate(sampling = case_when(sampling=="simpleRandom" ~ "random",
                               sampling=="regular" ~ "regular",
-                              sampling=="clusterMedium" ~ "weak clustered",
+                              sampling=="clusterMedium" ~ "weakly clustered",
                               sampling=="clusterStrong" ~ "medium clustered",
-                              sampling=="clusterGapped" ~ "strong clustered"),
+                              sampling=="clusterGapped" ~ "strongly clustered"),
          sampling = as.factor(sampling),
-         sampling = fct_relevel(sampling, c("regular", "random", "weak clustered", "medium clustered", "strong clustered")))
+         sampling = fct_relevel(sampling, c("regular", "random", "weakly clustered", "medium clustered", "strongly clustered")))
 
 
 # load AOI
@@ -85,7 +85,7 @@ names(AGB_sample) <- c("bio1","bio5", "bio7", "bio12", "bio15", "outcome")
 # plot sample points
 pts_pl <- ggplot() +
   geom_sf(data=aoi, fill=NaN) +
-    geom_sf(data=pts_sf |> drop_na(), size=0.1, stroke=0.01,alpha=1,colour="blue4")+ #size=0.01
+    geom_sf(data=pts_sf |> drop_na(), size=0.01, stroke=0.01,alpha=1,colour="blue4")+ #size=0.01
     theme_bw()+
     theme(legend.position = NaN,
           title = element_text(size=9)) +
@@ -112,7 +112,7 @@ pred_pts_mp <- plot_grid(pred_map, pts_pl, ncol=2, align="vh",labels = "AUTO",
                          vjust=3.8)
 pred_pts_mp <- plot_grid(pred_pts_mp, NULL, legend_pred, nrow=3, rel_heights = c(1,-0.1,0.2))
 
-#ggsave("figures/fig9_AGB_simulation.pdf", pred_pts_mp, width=8, height=6)
+ggsave("figures/fig9_AGB_simulation.pdf", pred_pts_mp, width=8, height=6)
 pred_pts_mp
 ```
 
@@ -190,8 +190,8 @@ outtab$design <- factor(outtab$design, levels=c("regular", "simpleRandom", "clus
                                                 "clusterStrong", "clusterGapped"))
 outtab$variate <- as.factor(outtab$variate)
 
-CVmethod_labs <- c("random", "spatial", "kNNDM", "kNNDM [tuned]")
-xlabs <- c("regular","random","weak\nclustered","medium\nclustered","strong\nclustered")
+CVmethod_labs <- c("random 10-fold", "spatial 10-fold", "kNNDM 10-fold", "kNNDM [tuned]")
+xlabs <- c("regular","random","weakly\nclustered","medium\nclustered","strongly\nclustered")
 
 lw <- 0.6
 w <- 0.45
@@ -207,7 +207,7 @@ diff_RMSE <- ggplot(outtab[outtab$methodID!=0,], aes(x=design, y=rRMSE, colour=m
     theme_bw() +
     theme(legend.position = "bottom")
 
-#ggsave("figures/fig10_RMSE_diff_AGB.pdf", diff_RMSE, height = unit(4, "cm"), width=unit(6, "cm"))
+ggsave("figures/fig10_RMSE_diff_AGB.pdf", diff_RMSE, height = unit(4, "cm"), width=unit(6.5, "cm"))
 diff_RMSE
 
 ```
@@ -360,13 +360,13 @@ for(design in unique(outtab$design)){
 
 pl_tab <- outtab |> 
   filter(methodID!=0) |> 
-  mutate(design = case_when(design=="clusterGapped" ~ "strong~clustered",
+  mutate(design = case_when(design=="clusterGapped" ~ "strongly~clustered",
                              design=="clusterStrong" ~ "medium~clustered",
-                             design=="clusterMedium" ~ "weak~clustered",
+                             design=="clusterMedium" ~ "weakly~clustered",
                              design=="regular" ~ "regular",
                              design=="simpleRandom" ~ "random"),
-         design=fct_relevel(design, c("regular", "random", "weak~clustered",
-                                      "medium~clustered", "strong~clustered")),
+         design=fct_relevel(design, c("regular", "random", "weakly~clustered",
+                                      "medium~clustered", "strongly~clustered")),
          k = as.factor(k)) |>
   rename("CV-true RMSE" = rRMSE, "log10(W)"=W) |> 
   select(-c(variate, methodID, method,RMSE, number)) |> 
@@ -393,7 +393,7 @@ W_RMSE <- ggplot(pl_tab, aes(x=k, y=ifelse(name == "CV-true~RMSE", value, log10(
              scales="free_y", labeller=label_parsed)
 W_RMSE
 
-#ggsave("figures/fig12_different_k.pdf", W_RMSE, height=8, width=15)
+ggsave("figures/fig12_different_k.pdf", W_RMSE, height=8, width=15)
 
 ```
 

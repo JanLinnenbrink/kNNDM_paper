@@ -215,6 +215,44 @@ c
 ```
 
 
+## Simulation data
+
+```{r figure 4 reproduced as in Milà et al. (2022)}
+# Sim2 functions
+source("simulation1_virtualSpecies/code/sim_functions.R")
+
+# Read data
+spoly <- quiet(st_read(dsn="simulation1_virtualSpecies/data/species_vdata.gpkg", layer="sampling_polygon"))
+wclim <- stack("simulation1_virtualSpecies/data/species_stack.grd")
+
+# Simulate points
+set.seed(1234)
+psamples1 <- mutate(sim2_samples(100, "sregular", spoly), distr="Strongly regular")
+psamples2 <- mutate(sim2_samples(100, "wregular", spoly), distr="Weakly regular")
+psamples3 <- mutate(sim2_samples(100, "random", spoly), distr="Random")
+psamples4 <- mutate(sim2_samples(100, "wclust", spoly), distr="Weakly clustered")
+psamples5 <- mutate(sim2_samples(100, "sclust", spoly), distr="Strongly clustered")
+psamples <- bind_rows(psamples1, psamples2, psamples3, psamples4, psamples5)
+psamples$distr <- fct_inorder(psamples$distr)
+
+# Plot landscape
+p1 <- rasterVis::levelplot(stretch(wclim, minv=0, maxv=1), 
+                           layout=c(4, 5), margin=F, scales=list(draw=FALSE))
+
+# Plot samples
+p2 <- ggplot() +
+  geom_sf(data=spoly, alpha=0.2, colour="grey50") +
+  geom_sf(data=psamples, size=0.2) +
+  facet_wrap(~distr, ncol=2) + 
+  theme_bw()
+
+p12 <- plot_grid(p1, p2, nrow=1, labels=c("A", "B"), rel_widths = c(1.2, 1))
+p12
+#save_plot("figures/fig4_sim_workflow.pdf", p12, base_height=5, base_asp=1.7)
+```
+
+
+
 ## Simulation results
 
 The following code reproduces figure 5, and shows the differences between cross-validated and true RMSE, R^2 and MAE for different sampling distributions.
@@ -228,7 +266,10 @@ library("tidyr")
 library("forcats")
 
 # read and process the simulation results
-sim_res <- read.csv("simulation1_virtualSpecies/results/sim_res.csv")
+sim_res <- read.csv("simulation1_virtualSpecies/results/sim_res.csv") |> 
+  rename("RMSE_knndm" = RMSE_kndm,
+         "MAE_knndm" = MAE_kndm,
+         "R2_knndm" = R2_kndm)
 
 sim_diff <- data.frame(rmse_rand = sim_res$RMSE_rand - sim_res$RMSE_surf,
                        rmse_spatial = sim_res$RMSE_spatial - sim_res$RMSE_surf,
@@ -244,17 +285,17 @@ sim_diff <- data.frame(rmse_rand = sim_res$RMSE_rand - sim_res$RMSE_surf,
                        mae_nndm = sim_res$MAE_nndm - sim_res$MAE_surf,
                        dsample = sim_res$dsample) |>
   pivot_longer(!dsample) |>
-  mutate(distr = case_when(dsample == "sregular" ~ "Strong\nregular",
-                                     dsample == "wregular" ~ "Weak\nregular",
+  mutate(distr = case_when(dsample == "sregular" ~ "Strongly\nregular",
+                                     dsample == "wregular" ~ "Weakly\nregular",
                                      dsample == "random" ~ "Random",
-                                     dsample == "wclust" ~ "Weak\nclustered",
-                                     dsample == "sclust" ~ "Strong\nclustered"),
+                                     dsample == "wclust" ~ "Weakly\nclustered",
+                                     dsample == "sclust" ~ "Strongly\nclustered"),
          distr = as.factor(distr),
-         distr = fct_relevel(distr, c("Strong\nregular", "Weak\nregular", "Random",
-                                   "Weak\nclustered", "Strong\nclustered")),
+         distr = fct_relevel(distr, c("Strongly\nregular", "Weakly\nregular", "Random",
+                                   "Weakly\nclustered", "Strongly\nclustered")),
          CV_method = case_when(grepl("rand", name) ~ "random 10-fold",
                                grepl("spatial", name) ~ "spatial 10-fold",
-                               grepl("nndm", name) ~ "NNDM LOO",
+                               grepl("_nndm", name) ~ "NNDM LOO",
                                grepl("knndm", name) ~ "kNNDM 10-fold"),
          CV_method = fct_relevel(CV_method, "random 10-fold",  "spatial 10-fold","NNDM LOO","kNNDM 10-fold"),
          group = case_when(startsWith(name, "rmse") ~ "RMSE",
@@ -281,7 +322,7 @@ diff_R2 <- ggplot(sim_diff[sim_diff$group=="R^2", ],
     scale_color_colorblind(name="CV method",) +
     geom_hline(aes(yintercept=0)) +
     xlab("") +
-    ylab(expression(-1* "*" * "(" * CV - true~R^2*")")) +
+    ylab(expression(CV - true~R^2)) +
     theme_bw(base_size = base.size) +
     theme(legend.position = "None")
 
@@ -316,63 +357,6 @@ sim_diff |>
 ```
 
 
-## Different numbers of k
-
-CV error estimates for kNNDM CV with different numbers of $k$ (first three rows). The respective W stat is shown in the fourth row.
-
-```{r figure 5, fig.width=8, fig.height=8, message=FALSE}
-library("ggplot2")
-library("ggthemes")
-library("cowplot")
-library("dplyr")
-library("tidyr")
-library("forcats")
-
-# read and process the simulation results
-sim_res <- read.csv("simulation1_virtualSpecies/results/sim_res_k1.csv")
-
-sim_diff <- data.frame(rmse_knndm = sim_res$RMSE_knndm - sim_res$RMSE_surf,
-                       r2_knndm = sim_res$R2_knndm - sim_res$R2_surf,
-                       mae_knndm = sim_res$MAE_knndm - sim_res$MAE_surf,
-                       W_knndm = sim_res$W_knndmCV,
-                       dsample = sim_res$dsample, k=sim_res$k) |>
-  pivot_longer(!c(dsample,k)) |>
-  mutate(distr = case_when(dsample == "sregular" ~ "Strong~regular",
-                                     dsample == "wregular" ~ "Weak~regular",
-                                     dsample == "random" ~ "Random",
-                                     dsample == "wclust" ~ "Weak~clustered",
-                                     dsample == "sclust" ~ "Strong~clustered"),
-         distr = as.factor(distr),
-         distr = fct_relevel(distr, c("Strong~regular", "Weak~regular", "Random",
-                                   "Weak~clustered", "Strong~clustered")),
-         CV_method = "kNNDM 10-fold",
-         group = case_when(startsWith(name, "rmse") ~ "CV-true~RMSE",
-                           startsWith(name, "mae") ~ "CV-true~MAE",
-                           startsWith(name, "r2") ~ "CV-true~R^2",
-                           startsWith(name, "W_") ~ "W"),
-         group=fct_relevel(group, "CV-true~RMSE", "CV-true~R^2", "CV-true~MAE", "W"))
-
-lw <- 0.4
-w <- 0.45
-base.size <- 12
-
-k_pl <- ggplot(sim_diff, aes(x=k, group=k, y=value)) +
-    geom_boxplot(position=position_dodge(0.6), lwd=lw, outlier.size = lw) +
-  geom_hline(yintercept = 0) +
-  scale_y_continuous("") +
-  scale_x_continuous(breaks=seq(2,20,6)) +
-    xlab("k") +
-    theme_bw(base_size = base.size) +
-    theme(aspect.ratio = 1, legend.position = "None",
-          #axis.text.x = element_markdown(),
-          panel.grid.minor = element_blank()) +
-  facet_grid(rows=vars(group), cols=vars(distr),
-             scales="free_y", labeller=label_parsed)
-
-ggsave("figures/fig7_diff_k.pdf", k_pl, height=6, width=8)
-k_pl
-```
-
 ## Association CV - True error and W statistic
 
 The following code reproduces figure 6, which shows the association between the absolute value difference between the CV and true map accuracy statistics and W statistic.
@@ -380,7 +364,12 @@ The following code reproduces figure 6, which shows the association between the 
 ```{r figure 6, fig.width=10,fig.height=5, message=FALSE}
 library("ggplot2")
 library("cowplot")
-cor_res <- read.csv("simulation1_virtualSpecies/results/sim_res_W.csv")
+library("dplyr")
+cor_res <- read.csv("simulation1_virtualSpecies/results/sim_res_W.csv") |> 
+  rename("RMSE_knndm" = RMSE_kndm,
+         "R2_knndm" = R2_kndm,
+         "MAE_knndm" = MAE_kndm)
+
 cor_diff <- data.frame(rmse_diff = cor_res$RMSE_knndm - cor_res$RMSE_surf,
                        r2_diff = cor_res$R2_knndm - cor_res$R2_surf,
                        mae_diff = cor_res$MAE_knndm - cor_res$MAE_surf,
@@ -451,11 +440,69 @@ comb
 ```
 
 
+
+## Different numbers of k
+
+CV error estimates for kNNDM CV with different numbers of $k$ (first three rows). The respective W stat is shown in the fourth row.
+
+```{r figure 7, fig.width=8, fig.height=8, message=FALSE}
+library("ggplot2")
+library("ggthemes")
+library("cowplot")
+library("dplyr")
+library("tidyr")
+library("forcats")
+
+# read and process the simulation results
+sim_res <- read.csv("simulation1_virtualSpecies/results/sim_res_k1.csv")
+
+sim_diff <- data.frame(rmse_knndm = sim_res$RMSE_knndm - sim_res$RMSE_surf,
+                       r2_knndm = sim_res$R2_knndm - sim_res$R2_surf,
+                       mae_knndm = sim_res$MAE_knndm - sim_res$MAE_surf,
+                       W_knndm = sim_res$W_knndmCV,
+                       dsample = sim_res$dsample, k=sim_res$k) |>
+  pivot_longer(!c(dsample,k)) |>
+  mutate(distr = case_when(dsample == "sregular" ~ "Strongly~regular",
+                                     dsample == "wregular" ~ "Weakly~regular",
+                                     dsample == "random" ~ "Random",
+                                     dsample == "wclust" ~ "Weakly~clustered",
+                                     dsample == "sclust" ~ "Strongly~clustered"),
+         distr = as.factor(distr),
+         distr = fct_relevel(distr, c("Strongly~regular", "Weakly~regular", "Random",
+                                   "Weakly~clustered", "Strongly~clustered")),
+         CV_method = "kNNDM 10-fold",
+         group = case_when(startsWith(name, "rmse") ~ "CV-true~RMSE",
+                           startsWith(name, "mae") ~ "CV-true~MAE",
+                           startsWith(name, "r2") ~ "CV-true~R^2",
+                           startsWith(name, "W_") ~ "W"),
+         group=fct_relevel(group, "CV-true~RMSE", "CV-true~R^2", "CV-true~MAE", "W"))
+
+lw <- 0.4
+w <- 0.45
+base.size <- 12
+
+k_pl <- ggplot(sim_diff, aes(x=k, group=k, y=value)) +
+    geom_boxplot(position=position_dodge(0.6), lwd=lw, outlier.size = lw) +
+  geom_hline(yintercept = 0) +
+  scale_y_continuous("") +
+  scale_x_continuous(breaks=seq(2,20,6)) +
+    xlab("k") +
+    theme_bw(base_size = base.size) +
+    theme(aspect.ratio = 1, legend.position = "None",
+          #axis.text.x = element_markdown(),
+          panel.grid.minor = element_blank()) +
+  facet_grid(rows=vars(group), cols=vars(distr),
+             scales="free_y", labeller=label_parsed)
+
+#ggsave("figures/fig7_diff_k.pdf", k_pl, height=6, width=8)
+k_pl
+```
+
 ## Computational time
 
-The following code reproduces figure 7, which compares NNDM LOOCV and kNNDM CV regarding their computational time requirements.
+The following code reproduces figure 8, which compares NNDM LOOCV and kNNDM CV regarding their computational time requirements.
 
-```{r figure 7, fig.width=8.5,fig.height=6, message=FALSE}
+```{r figure 8, fig.width=8.5,fig.height=6, message=FALSE}
 
 library("ggplot2")
 library("dplyr")
@@ -464,15 +511,14 @@ library("tidyr")
 
 time_res <- bind_rows(read.csv("simulation1_virtualSpecies/results/time_res_sclust.csv"),
                       read.csv("simulation1_virtualSpecies/results/time_res_rand.csv")) |> 
-  mutate(distr = case_when(dsample == "random" ~ "Random", dsample == "sclust" ~ "Strong\nclustered"),
+  mutate(distr = case_when(dsample == "random" ~ "Random", dsample == "sclust" ~ "Strongly\nclustered"),
          distr = as.factor(distr),
-         distr = fct_relevel(distr, c("Random", "Strong\nclustered")))
+         distr = fct_relevel(distr, c("Random", "Strongly\nclustered")))
   
 
 names(time_res) <- c("dsample", "knndm_time_model", "nndm_time_model", "knndm_time_algorithm", "nndm_time_algorithm", "n_tpoints", "distr")
 
 
-# something went wrong with n=100 for random sample distribution
 tm <- time_res |> 
   dplyr::select(-dsample) |> 
   mutate(knndm_total = knndm_time_algorithm + knndm_time_model,
