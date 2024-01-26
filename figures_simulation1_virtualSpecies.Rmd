@@ -1,5 +1,5 @@
 ---
-title: "Methods and results"
+title: "Simulation 1: Workflow and results"
 author: "Jan Linnenbrink & Carles Milà"
 date: "`r format(Sys.time(), '%Y-%m-%d')`"
 output: pdf_document
@@ -12,7 +12,7 @@ knitr::opts_chunk$set(fig.align = 'center', message = FALSE, echo=FALSE,
                       warning = FALSE, fig.width = 8, fig.height = 3)
 ```
 
-This file contains the code to reproduce figures 1, 3, 5, 6 & 7 of the paper "kNNDM: k-fold Nearest Neighbour Distance Matching Cross-Validation for map accuracy estimation" by J Linnenbrink, C Milà, M Ludwig & H Meyer.
+This file contains the code to reproduce figures 1, 3, 4, 5, 6 & 7 of the paper "kNNDM: k-fold Nearest Neighbour Distance Matching Cross-Validation for map accuracy estimation" by J Linnenbrink, C Milà, M Ludwig & H Meyer.
 
 
 
@@ -131,8 +131,8 @@ comb_pl <- plot_grid(NULL, top_row, NULL, bottom_row, NULL, legend_bottom, NULL,
 comb_pl
 ```
 
-
-## kNNDM workflow
+\newpage
+## kNNDM algorithm
 
 This code reproduces the kNNDM workflow shown in figure 3. Several numbers of clusters *q* are compared regarding their W statistic (bottom row).
 
@@ -215,9 +215,12 @@ c
 ```
 
 
+\newpage
 ## Simulation data
 
-```{r figure 4 reproduced as in Milà et al. (2022)}
+Figure 4: Data used in the simulation: A) bioclimatic covariates and response (all linearly stretched to [0,1] for visualization purposes); and B) example of one iteration of the sample simulation. Figure reproduced as in Milà et al. (2022).
+
+```{r figure 4 reproduced as in Milà et al. (2022), fig.height=5, fig.width=10}
 # Sim2 functions
 source("simulation1_virtualSpecies/code/sim_functions.R")
 
@@ -253,6 +256,7 @@ p12
 
 
 
+\newpage
 ## Simulation results
 
 The following code reproduces figure 5, and shows the differences between cross-validated and true RMSE, R^2 and MAE for different sampling distributions.
@@ -357,6 +361,7 @@ sim_diff |>
 ```
 
 
+\newpage
 ## Association CV - True error and W statistic
 
 The following code reproduces figure 6, which shows the association between the absolute value difference between the CV and true map accuracy statistics and W statistic.
@@ -440,10 +445,10 @@ comb
 ```
 
 
-
+\newpage
 ## Different numbers of k
 
-CV error estimates for kNNDM CV with different numbers of $k$ (first three rows). The respective W stat is shown in the fourth row.
+Figure 7: CV error estimates for kNNDM CV with different numbers of $k$ (first three rows). The respective W stat is shown in the fourth row.
 
 ```{r figure 7, fig.width=8, fig.height=8, message=FALSE}
 library("ggplot2")
@@ -475,14 +480,22 @@ sim_diff <- data.frame(rmse_knndm = sim_res$RMSE_knndm - sim_res$RMSE_surf,
                            startsWith(name, "mae") ~ "CV-true~MAE",
                            startsWith(name, "r2") ~ "CV-true~R^2",
                            startsWith(name, "W_") ~ "W"),
-         group=fct_relevel(group, "CV-true~RMSE", "CV-true~R^2", "CV-true~MAE", "W"))
+         group=fct_relevel(group, "CV-true~RMSE", "CV-true~R^2", "CV-true~MAE", "W")) |> 
+  group_by(distr, k, group) |> 
+  summarise_at(vars(value),
+               list(Q1=~quantile(., probs = 0.25),
+                    median=median, Q3=~quantile(., probs = 0.75)))
 
+  
 lw <- 0.4
 w <- 0.45
 base.size <- 12
 
-k_pl <- ggplot(sim_diff, aes(x=k, group=k, y=value)) +
-    geom_boxplot(position=position_dodge(0.6), lwd=lw, outlier.size = lw) +
+k_pl <- ggplot(sim_diff, aes(x=k, group=k)) +
+    geom_line(aes(y=median, group=distr), colour="navy") +
+  geom_point(aes(y=median), shape=21, size=0.8, colour="navy") +
+    geom_errorbar(aes(ymin=Q1, ymax=Q3), 
+                  width=0.4, linewidth=0.2, colour="navy") +
   geom_hline(yintercept = 0) +
   scale_y_continuous("") +
   scale_x_continuous(breaks=seq(2,20,6)) +
@@ -494,10 +507,12 @@ k_pl <- ggplot(sim_diff, aes(x=k, group=k, y=value)) +
   facet_grid(rows=vars(group), cols=vars(distr),
              scales="free_y", labeller=label_parsed)
 
-#ggsave("figures/fig7_diff_k.pdf", k_pl, height=6, width=8)
+#ggsave("figures/fig7_diff_k_2.pdf", k_pl, height=6, width=8)
 k_pl
 ```
 
+
+\newpage
 ## Computational time
 
 The following code reproduces figure 8, which compares NNDM LOOCV and kNNDM CV regarding their computational time requirements.
@@ -547,6 +562,12 @@ tp_ext
 
 #ggsave("figures/fig8_time_analysis.pdf", tp_ext, height=6, width=8.5)
 
+tm |> 
+  dplyr::filter(what=="total") |> 
+  dplyr::select(-c("type", "what")) |> 
+  pivot_wider(names_from=name, values_from=value) |> 
+  mutate("time_diff" = nndm_total-knndm_total) |> 
+  slice(which.max(time_diff))
 
 ```
 

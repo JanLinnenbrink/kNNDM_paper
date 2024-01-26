@@ -1,6 +1,10 @@
 # This script contains helper functions to generate the figures from 
 # Linnenbrink, Milà, Ludwig and Meyer (2023)
-
+quiet <- function(x) {
+  sink(tempfile())
+  on.exit(sink())
+  invisible(force(x))
+}
 
 #' Function to plot integral between Gj and Gij
 #' @details

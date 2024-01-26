@@ -1,27 +1,26 @@
 ---
-title: "Results of simulation 2: above-ground biomass (AGB)"
+title: "Simulation 2: above-ground biomass (AGB)"
+author: "Jan Linnenbrink & Carles Milà"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
 output: pdf_document
-fig-align: center
-date: 2023-10-25
-date-format: iso
-author: Jan Linnenbrink
 editor_options: 
   chunk_output_type: console
 ---
-  
-This file contains the code to reproduce the figures of the appendix of the paper "kNNDM: k-fold Nearest Neighbour Distance Matching Cross-Validation for map accuracy assessment" by Jan Linnenbrink, Carles Milà, Marvin Ludwig and Hanna Meyer. The appendix consists of a second simulation, that is based on the above-ground biomass example presented in de Bruin et al. (2022, https://doi.org/10.1016/j.ecoinf.2022.101665).
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo=FALSE)
-knitr::opts_chunk$set(warning=FALSE)
-knitr::opts_chunk$set(message=FALSE)
+```{r rmd options, echo=FALSE}
+knitr::opts_chunk$set(fig.align = 'center', message = FALSE, echo=FALSE, 
+                      warning = FALSE, fig.width = 8, fig.height = 3, dev='pdf')
 ```
 
+This file contains the code to reproduce the figures of the appendix of the paper "kNNDM: k-fold Nearest Neighbour Distance Matching Cross-Validation for map accuracy assessment" by Jan Linnenbrink, Carles Milà, Marvin Ludwig and Hanna Meyer. The appendix consists of a second simulation, that is based on the above-ground biomass example presented in de Bruin et al. (2022, https://doi.org/10.1016/j.ecoinf.2022.101665).
+
+
+\newpage
 ## Data used in simulation 2
 
 This code reproduces Figure S1: Data used in the AGB simulation: A) shows a subset of the 22 predictors, as well as the response raster. The rasters were linearly stretched to [0,1] for visualization purposes. B) shows one iteration of the different sampling designs. Data from \url{https://doi.org/10.5281/zenodo.6513429}.
 
-```{r}
+```{r figS1, fig.height=8, fig.width=10}
 library(ggplot2)
 library(dplyr)
 library(tidyr)
@@ -30,6 +29,7 @@ library(terra)
 library(tidyterra)
 library(cowplot)
 library(forcats)
+source("simulation1_virtualSpecies/code/figures_utils.R")
 
 infolder  <- "simulation2_AGB/data/"
 smpl <- c("regular", "simpleRandom", "clusterMedium", "clusterStrong", "clusterGapped")
@@ -66,7 +66,7 @@ pts_sf <- do.call(rbind, pts_sf) |>
 
 
 # load AOI
-aoi <- st_read("simulation2_AGB/data/strata.shp") |> 
+aoi <- quiet(st_read("simulation2_AGB/data/strata.shp")) |> 
   st_union() 
 st_crs(aoi) <- st_crs(pts_sf)
 
@@ -117,11 +117,12 @@ pred_pts_mp
 ```
 
 
+\newpage
 ## Comparison of the performance of different CV methods
 
 Differences between Cross-Validated and true RMSE for the first supplementary simulation (Figure S2). kNNDM [tuned] refers to the kNNDM split that yielded the lowest W statistic among different number of folds $k \in [2, 4, 6, ...,  20]$. 
 
-```{r calculate RMSE estimated by CV - the true RMSE}
+```{r calculate statistics}
 
 infolder  <- "simulation2_AGB/results"
 outfolder <- "figures"
@@ -173,11 +174,7 @@ write.csv(outtab, file.path(infolder, "outtab100.csv"))
 ```
 
 
-```{r generate the plot of RMSE (CV) - RMSE (true)}
-
-#| fig-align: center
-#| fig-width: 5
-#| fig-height: 8
+```{r figS2}
 
 library(ggplot2)
 library(ggthemes)
@@ -213,11 +210,12 @@ diff_RMSE
 ```
 
 
+\newpage
 ## Association CV - True error and W statistic
 
 The following code reproduces figure S3, which shows the relationship between the absolute value difference between the Cross-Validated and true RMSE with the W statistic in the second simulation. Here, the W statistic explained 28\% of the variation in the absolute value differences.
 
-```{r}
+```{r figS3, fig.height=4,fig.width=20}
 library(ggplot2)
 
 infolder  <- "simulation2_AGB/results"
@@ -292,12 +290,11 @@ W_RMSE
 ```
 
 
-
-
+\newpage
 ## Different numbers of k
 Following, figure S4 is reproduced, which shows the influence of different numbers of k on the difference between the Cross-Validated and true RMSE (upper row), and on the W stat (lower row). Note that the values of the W statistic were log-scaled.
 
-```{r}
+```{r figS4, fig.height=12, fig.asp=0.8, fig.height=5, fig.width=20}
 
 library(ggplot2)
 library(cowplot)
@@ -393,7 +390,7 @@ W_RMSE <- ggplot(pl_tab, aes(x=k, y=ifelse(name == "CV-true~RMSE", value, log10(
              scales="free_y", labeller=label_parsed)
 W_RMSE
 
-ggsave("figures/fig12_different_k.pdf", W_RMSE, height=8, width=15)
+#ggsave("figures/fig12_different_k.pdf", W_RMSE, height=8, width=15)
 
 ```
 
