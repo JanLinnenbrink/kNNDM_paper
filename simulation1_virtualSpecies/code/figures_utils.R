@@ -19,27 +19,27 @@ plot.knndm.integral <- function(x, ...){
   Gij_df$Function <- "1_Gij(r)"
   
   # Prepare data for plotting: G function
-  Gj_df <- data.frame(r=x$Gj[order(x$Gj)])
-  Gj_df$Function <- "2_Gj(r)"
+  Gjstar_df <- data.frame(r=x$Gjstar[order(x$Gjstar)])
+  Gjstar_df$Function <- "2_Gj(r)"
   
   # Merge data for plotting
-  Gplot <- rbind(Gij_df, Gj_df)
+  Gplot <- rbind(Gij_df, Gjstar_df)
   
   n = length(Gij_df$r)
   dfx = data.frame(sort(Gij_df$r),cumsum(rep(1/n,n)),"x")
-  n1=length(Gj_df$r)
-  dfy = data.frame(sort(Gj_df$r),cumsum(rep(1/n1,n1)),"y")
+  n1=length(Gjstar_df$r)
+  dfy = data.frame(sort(Gjstar_df$r),cumsum(rep(1/n1,n1)),"y")
   colnames(dfx) = colnames(dfy) = c("point","ecdf","sample")
   df = rbind(dfy,dfx)
   
-  combined = sort(c(Gij_df$r,Gj_df$r))
+  combined = sort(c(Gij_df$r,Gjstar_df$r))
   
   midpoints = combined[-(2*n)]+diff(combined)/2
   fhat = ehat = dhat = width = numeric(2*n-1)
   for (i in 1:(2*n-1)) {
     point = midpoints[i]
     width[i] = (point-combined[i])*2
-    fhat[i] = mean(Gj_df$r < point)
+    fhat[i] = mean(Gjstar_df$r < point)
     ehat[i] = mean(Gij_df$r < point)
     dhat[i] = mean(combined < point)
   }
@@ -67,13 +67,13 @@ plot.knndm.integral <- function(x, ...){
     ggplot2::geom_vline(xintercept=0, lwd = 0.1, ggplot2::aes_string(x="r", group="Function", col="Function")) +
     ggplot2::geom_hline(yintercept=0, lwd = 0.1, ggplot2::aes_string(x="r", group="Function", col="Function")) +
     ggplot2::geom_hline(yintercept=1, lwd = 0.1, ggplot2::aes_string(x="r", group="Function", col="Function")) +
-    geom_polygon(data=df3,aes(x=point,y=ecdf,group=block),alpha=0.7, fill="orange") +
+    geom_polygon(data=df3,aes(x=point,y=ecdf,group=block),alpha=0.7, fill="grey40") +
     ggplot2::stat_ecdf(geom = "step", lwd = 1, ggplot2::aes_string(x="r", group="Function", col="Function")) +
-    ggplot2::scale_colour_manual(values=c("#000000", "#56B4E9"),
+    ggplot2::scale_colour_manual(values=c("black", "#E69F00"),
                                  labels=c(expression(hat(G)[ij](r)),
-                                          expression(hat(G)[j](r)))) +
+                                          expression(hat(G)[j]^"*"*"(r,L)"))) +
     ggplot2::ylab(expression(paste(hat(G)[ij](r), ", ",
-                                   hat(G)[j](r))))
+                                   hat(G)[j]^"*"*"(r,L)")))
 }
 
 #' Function that keeps every split of kNNDM to reproduce fig 2
@@ -176,11 +176,11 @@ plot.knndm <- function(x, overlay=FALSE, ...){
   Gjstar_df$Function <- "2_Gjstar(r)"
   
   # Prepare data for plotting: G function
-  Gj_df <- data.frame(r=x$Gj[order(x$Gj)])
-  Gj_df$Function <- "3_Gj(r)"
+  Gjstar_df <- data.frame(r=x$Gj[order(x$Gj)])
+  Gjstar_df$Function <- "3_Gj(r)"
   
   # Merge data for plotting
-  Gplot <- rbind(Gij_df, Gjstar_df, Gj_df)
+  Gplot <- rbind(Gij_df, Gjstar_df, Gjstar_df)
   
   # Plot
   if (isFALSE(overlay)) {

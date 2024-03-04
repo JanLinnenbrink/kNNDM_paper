@@ -365,9 +365,15 @@ pl_tab <- outtab |>
          design=fct_relevel(design, c("regular", "random", "weakly~clustered",
                                       "medium~clustered", "strongly~clustered")),
          k = as.factor(k)) |>
+  mutate("W" = log10(W)) |> 
   rename("CV-true RMSE" = rRMSE, "log10(W)"=W) |> 
   select(-c(variate, methodID, method,RMSE, number)) |> 
-  pivot_longer(-c(design, k)) 
+  pivot_longer(-c(design, k)) |> 
+  group_by(design, k, name) |> 
+  summarise_at(vars(value),
+               list(Q1=~quantile(., probs = 0.25, na.rm=TRUE),
+                    median=~median(., na.rm=TRUE), 
+                    Q3=~quantile(., probs = 0.75, na.rm=TRUE)))
 
 pl_tab$name <- as.factor(pl_tab$name)
 levels(pl_tab$name) <- c("CV-true~RMSE", expression("log"[10]*"(W)"))
@@ -376,8 +382,10 @@ m <- 0.5
 b.size <- 20
 lw <- 0.6
 
-W_RMSE <- ggplot(pl_tab, aes(x=k, y=ifelse(name == "CV-true~RMSE", value, log10(value)))) +
-    geom_boxplot(position=position_dodge(0.6), lwd=lw) +
+W_RMSE <- ggplot(pl_tab, aes(x=k, y=median, ymin=Q1, ymax=Q3)) +
+    geom_line(aes(group=design), colour="navy") +
+  geom_point(shape=21, size=1, colour="navy") +
+    geom_errorbar(width=0.4, linewidth=0.2, colour="navy") +
   geom_hline(yintercept = 0) +
   scale_y_continuous("") +
     xlab("k") +

@@ -28,6 +28,15 @@ library("cowplot")
 source("simulation1_virtualSpecies/code/figures_utils.R")
 source("simulation1_virtualSpecies/code/sim_functions.R")
 
+distclust_proj <- function(tr_coords, folds){
+  alldist <- rep(NA, length(folds))
+  for(f in unique(folds)){
+    alldist[f == folds] <- c(FNN::knnx.dist(query = tr_coords[f == folds,,drop=FALSE],
+                                            data = tr_coords[f != folds,,drop=FALSE], k = 1))
+  }
+  alldist
+}
+
 AOI <- quiet(st_read(dsn="simulation1_virtualSpecies/data/species_vdata.gpkg", layer="sampling_polygon"))[1,]
 AOI_part <- st_buffer(AOI, -200000)
 
@@ -41,18 +50,42 @@ tpoints_cl$cl <- "clustered"
 tpoints_rand$cl <- "random"
 tpoints_reg$cl <- "regular"
 
+tcoords_reg <- st_coordinates(tpoints_reg)[,1:2]
+tcoords_rand <- st_coordinates(tpoints_rand)[,1:2]
+tcoords_clust <- st_coordinates(tpoints_cl)[,1:2]
+
 tp <- rbind(tpoints_rand, tpoints_cl)
 
 set.seed(100)
 ppoints <- st_sample(AOI, 500, type = "regular") |>
   st_transform(st_crs(tpoints_rand))
 
+ppoints_coords <- st_coordinates(ppoints)[,1:2]
+
 set.seed(100)
-k_reg <- knndm(tpoints_reg, ppoints=ppoints)
+folds_reg <- sample(1:10, nrow(tpoints_reg), replace=TRUE)
 set.seed(100)
-k_rand <- knndm(tpoints_rand, ppoints=ppoints)
+folds_rand <- sample(1:10, nrow(tpoints_rand), replace=TRUE)
 set.seed(100)
-k_clust <- knndm(tpoints_cl, k = 2,  ppoints=ppoints, maxp=0.8)
+folds_cl <- sample(1:10, nrow(tpoints_cl), replace=TRUE)
+
+
+Gjstar_reg <- distclust_proj(tcoords_reg, folds_reg)
+Gjstar_rand <- distclust_proj(tcoords_rand, folds_rand)
+Gjstar_cl <- distclust_proj(tcoords_rand, folds_cl)
+
+Gij_reg <- c(FNN::knnx.dist(query = ppoints_coords,
+                            data = tcoords_reg, k = 1))
+Gij_rand <- c(FNN::knnx.dist(query = ppoints_coords,
+                            data = tcoords_rand, k = 1))
+Gij_cl <- c(FNN::knnx.dist(query = ppoints_coords,
+                            data = tcoords_clust, k = 1))
+
+
+k_reg <- list("Gij"=Gij_reg, "Gjstar"=Gjstar_reg)
+k_rand <- list("Gij"=Gij_rand, "Gjstar"=Gjstar_rand)
+k_clust <- list("Gij"=Gij_cl, "Gjstar"=Gjstar_cl)
+
 
 pts.size <- 1
 ppts.alpha <- 0.5
@@ -62,14 +95,14 @@ Ws <- lapply(list(k_reg, k_rand,k_clust), function(x) twosamples::wass_stat(x$Gj
 
 reg_dist <- plot.knndm.integral(k_reg) +
   scale_x_continuous(labels = function(x) format(x, scientific = TRUE),n.breaks = 3, limits=c(0,4*10^5)) +
-  geom_text(aes(label=paste("W=", scales::comma(round(Ws[[1]]))), x=12^5,y=0.6), size=5, col="orange") +
+  geom_text(aes(label=paste("W=", scales::comma(round(Ws[[1]]))), x=12^5,y=0.6), size=5, col="grey40") +
   xlab("r") +
   theme_bw(base_size = base.size) +
   theme(aspect.ratio = 1, legend.position = NaN,plot.margin = unit(rep(0.2,4), "cm")) 
  
 rand_dist <- plot.knndm.integral(k_rand) + 
   scale_x_continuous(labels = function(x) format(x, scientific = TRUE),n.breaks = 3, limits=c(0,4*10^5)) +
-  geom_text(aes(label=paste("W=", scales::comma(round(Ws[[2]]))), x=12^5,y=0.6), size=5, col="orange") +
+  geom_text(aes(label=paste("W=", scales::comma(round(Ws[[2]]))), x=12^5,y=0.6), size=5, col="grey40") +
   xlab("r") +
   theme_bw(base_size = base.size) +
   theme(aspect.ratio = 1, legend.position = NaN,plot.margin = unit(rep(0.2,4), "cm")) 
@@ -77,10 +110,11 @@ rand_dist <- plot.knndm.integral(k_rand) +
 clust_dist <- plot.knndm.integral(k_clust) + 
   scale_x_continuous(labels = function(x) format(x, scientific = TRUE),n.breaks = 3, limits=c(0,4*10^5)) +
   xlab("r") +
-  geom_text(aes(label=paste("W=", scales::comma(round(Ws[[3]]))), x=12^5,y=0.6), size=5, col="orange") +
+  geom_text(aes(label=paste("W=", scales::comma(round(Ws[[3]]))), x=12^5,y=0.6), size=5, col="grey40") +
   theme_bw(base_size = base.size) +
   theme(aspect.ratio = 1, legend.position = NaN,plot.margin = unit(rep(0.2,4), "cm")) 
-legend_bottom <- get_legend(rand_dist+
+
+legend_bottom <- get_legend(rand_dist + theme_void() +
                               guides(color = guide_legend(nrow = 1)) +
                               theme(legend.position = "bottom"))
 
@@ -123,9 +157,20 @@ pts_rand_pl <- ggplot() +
   facet_wrap(~cl)
 
 top_row <- plot_grid(pts_reg_pl, pts_rand_pl, pts_cl_pl, nrow=1)
-bottom_row <- plot_grid(reg_dist, rand_dist,  clust_dist, nrow=1)
-comb_pl <- plot_grid(NULL, top_row, NULL, bottom_row, NULL, legend_bottom, NULL,  
-                     nrow=7, rel_heights = c(-0.22,1, -0.42,1,-0.7,1,-0.45))
+
+bottom_row <- plot_grid(reg_dist  + theme(plot.background = element_rect(fill = NA, colour = NA)), rand_dist + theme(plot.background = element_rect(fill = NA, colour = NA)), clust_dist + theme(plot.background = element_rect(fill = NA, colour = NA)), nrow=1)
+
+theme_bw()$plot.margin
+
+comb_pl <- plot_grid(NULL,
+                     top_row + theme(plot.margin = unit(c(5.5,5.5,5.5,5.5), "points")),
+                     NULL, 
+                     bottom_row + theme(plot.margin = unit(c(5.5,5.5,5.5,5.5), "points")),
+                     NULL,
+                     legend_bottom,
+                     NULL,  
+                     nrow=7, 
+                     rel_heights = c(-0.22,1, -0.42,1,-0.7,1,-0.45))
 
 #ggsave("figures/fig1_example_ecdfs.png", comb_pl, height = 12, width=20, units="cm")
 comb_pl
@@ -492,9 +537,9 @@ w <- 0.45
 base.size <- 12
 
 k_pl <- ggplot(sim_diff, aes(x=k, group=k)) +
-    geom_line(aes(y=median, group=distr), colour="navy") +
+  geom_line(aes(y=median, group=distr), colour="navy") +
   geom_point(aes(y=median), shape=21, size=0.8, colour="navy") +
-    geom_errorbar(aes(ymin=Q1, ymax=Q3), 
+  geom_errorbar(aes(ymin=Q1, ymax=Q3), 
                   width=0.4, linewidth=0.2, colour="navy") +
   geom_hline(yintercept = 0) +
   scale_y_continuous("") +
@@ -507,7 +552,7 @@ k_pl <- ggplot(sim_diff, aes(x=k, group=k)) +
   facet_grid(rows=vars(group), cols=vars(distr),
              scales="free_y", labeller=label_parsed)
 
-#ggsave("figures/fig7_diff_k_2.pdf", k_pl, height=6, width=8)
+#ggsave("figures/fig7_diff_k.pdf", k_pl, height=6, width=8)
 k_pl
 ```
 
@@ -566,9 +611,23 @@ tm |>
   dplyr::filter(what=="total") |> 
   dplyr::select(-c("type", "what")) |> 
   pivot_wider(names_from=name, values_from=value) |> 
-  mutate("time_diff" = nndm_total-knndm_total) |> 
-  slice(which.max(time_diff))
+  mutate(
+    "knndm_total" = knndm_total/(60^2),
+    "nndm_total" =  nndm_total/(60^2),
+    "time_diff" = (nndm_total-knndm_total)) |> 
+  filter(n_tpoints==4000)
 
+(tm_summary <- tm |> 
+  dplyr::filter(what=="total") |> 
+  dplyr::select(-c("type", "what")) |> 
+  pivot_wider(names_from=name, values_from=value) |> 
+  summarise(reduction_mean = mean(nndm_total/knndm_total),
+            reduction_sd = sd(nndm_total/knndm_total),
+            reduction_max = max(nndm_total/knndm_total),
+            reduction_min = min(nndm_total/knndm_total)))
+
+print(paste0("mean reduction = ", tm_summary$reduction_mean |> round(0), 
+             "; sd of the reduction = ", tm_summary$reduction_sd |> round(0)))
 ```
 
 
